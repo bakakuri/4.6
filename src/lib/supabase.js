@@ -4,7 +4,12 @@ const url = import.meta.env.VITE_SUPABASE_URL
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!url || !key) {
-  console.error('⛔ Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in .env')
+  throw new Error(
+    '⛔ Supabase env vars missing!\n' +
+    'Vercel → Project → Settings → Environment Variables:\n' +
+    '  VITE_SUPABASE_URL\n' +
+    '  VITE_SUPABASE_ANON_KEY'
+  )
 }
 
 export const supabase = createClient(url, key)
