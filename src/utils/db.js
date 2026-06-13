@@ -147,9 +147,9 @@ export const getChatMessages = async (limit = 60) => {
   if (error) { console.error(error); return [] }
   return (data||[]).reverse()
 }
-export const sendChatMessage = async ({ userId, username, text, isBot=false, wordId=null }) => {
+export const sendChatMessage = async ({ userId, username, text, isBot=false, wordId=null, lang=null }) => {
   const { data, error } = await supabase.from('chat_messages')
-    .insert({ user_id: isBot ? null : userId, username, text, is_bot: isBot, word_id: wordId })
+    .insert({ user_id: isBot ? null : userId, username, text, is_bot: isBot, word_id: wordId, lang })
     .select().single()
   if (error) { console.error(error); return null }
   return data
@@ -177,3 +177,4 @@ export const getLeaderboard = async (lang) => {
   }))
   return results.sort((a, b) => b.learned - a.learned)
 }
+  
