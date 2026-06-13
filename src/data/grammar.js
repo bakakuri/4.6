@@ -121,4 +121,28 @@ const GR = {
   // ═══════════════════════════════════════════════════════
   spanish: [
     { cat: 'Sustantivos', icon: '📝', topics: [
-      { title: 'Género — Gender', body: `**Masculine (-o):** el libro, el carro, el chico\n**Feminine (-a):** la casa, la chica, la mesa\n\n**Exceptions:**\n• el día, el problema, el tema (masc. despite -a)\n• la mano (fem. despite -o)\n\n**Articles:**\n• el / los (masc.)\n• la / las (fem.)\n• un / una (indefinite)\n\n**Contractions:** a+el=al, de+el=del`, ex: ['El libro es i
+      { title: 'Género — Gender', body: `**Masculine (-o):** el libro, el carro, el chico\n**Feminine (-a):** la casa, la chica, la mesa\n\n**Exceptions:**\n• el día, el problema, el tema (masc. despite -a)\n• la mano (fem. despite -o)\n\n**Articles:**\n• el / los (masc.)\n• la / las (fem.)\n• un / una (indefinite)\n\n**Contractions:** a+el=al, de+el=del`, ex: ['El libro es interesante.', 'La casa es grande.', 'Los estudiantes estudian mucho.'] },
+    ]},
+    { cat: 'Verbos', icon: '⚡', topics: [
+      { title: 'Presente de Indicativo', body: `**-AR (hablar):**\nyo hablo / tú hablas / él habla\nnosotros hablamos / vosotros habláis / ellos hablan\n\n**-ER (comer):**\nyo como / tú comes / él come\n\n**-IR (vivir):**\nyo vivo / tú vives / él vive\n\n**Irregulars:**\nser: soy, eres, es, somos, sois, son\nestar: estoy, estás, está...\nir: voy, vas, va...\ntener: tengo, tienes, tiene...`, ex: ['Yo hablo español todos los días.', 'Ella come en el restaurante.', '¿Dónde vives tú?'] },
+      { title: 'Ser vs Estar', body: `**SER** (permanent/identity):\n• Identity: Soy María.\n• Nationality: Ella es española.\n• Profession: Él es médico.\n• Time: Son las tres.\n\n**ESTAR** (temporary/location):\n• Location: Estoy en casa.\n• Emotional state: Estoy feliz.\n• Ongoing action: Estoy comiendo.`, ex: ['Soy estudiante pero estoy cansado.', '¿Cómo estás? — Estoy bien.', 'La fiesta es aquí pero no estoy aquí.'] },
+      { title: 'Pretérito Indefinido', body: `**-AR (hablar):**\nyo hablé / tú hablaste / él habló\nnosotros hablamos / ellos hablaron\n\n**-ER/-IR (comer/vivir):**\nyo comí / tú comiste / él comió\n\n**Key irregulars:**\nser/ir: fui, fuiste, fue...\ntener: tuve, tuviste, tuvo...\nhacer: hice, hiciste, hizo...`, ex: ['Ayer fui al supermercado.', 'Ella habló con su jefe esta mañana.', '¿Qué hiciste el fin de semana?'] },
+    ]},
+  ],
+
+  // ═══════════════════════════════════════════════════════
+  // 🇫🇷 FRENCH
+  // ═══════════════════════════════════════════════════════
+  french: [
+    { cat: 'Noms', icon: '📝', topics: [
+      { title: 'Genre — Gender', body: `**Masculine indicators:**\n-age: le voyage, le fromage\n-ment: le gouvernement\n-eau: le gâteau\n\n**Feminine indicators:**\n-tion/-sion: la nation, la décision\n-ité/-té: la liberté, la qualité\n-ure: la culture, la nature\n\n**Articles:**\nle/la/l' → les (plural)\nun/une → des\ndu/de la/de l' (partitive)`, ex: ['Le livre est très intéressant.', 'La maison est grande.', 'Les enfants jouent dans le parc.'] },
+    ]},
+    { cat: 'Verbes', icon: '⚡', topics: [
+      { title: "Présent de l'indicatif", body: `**-ER (parler):**\nje parle / tu parles / il parle\nnous parlons / vous parlez / ils parlent\n\n**-IR (finir):**\nje finis / tu finis / il finit\nnous finissons / vous finissez / ils finissent\n\n**-RE (vendre):**\nje vends / tu vends / il vend\n\n**Essentials:**\nêtre: suis, es, est, sommes, êtes, sont\navoir: ai, as, a, avons, avez, ont\naller: vais, vas, va, allons, allez, vont`, ex: ['Je parle français tous les jours.', 'Elle finit son travail à 18h.', 'Ils font du sport le matin.'] },
+      { title: 'Passé Composé', body: `**avoir + past participle** (most verbs):\nje mangé, tu as mangé, il a mangé\n\n**être + past participle** (DR MRS VANDERTRAMP):\nDevenir, Rester, Mourir, Sortir, Venir, Aller,\nNaître, Descendre, Entrer, Rentrer, Tomber,\nRetourner, Arriver, Monter, Partir\n\nElle est allée (f.) / Il est allé (m.)\n\n**Agreement with être:** participle agrees in gender/number`, ex: ["J'ai mangé une pomme.", 'Elle est allée au marché hier.', 'Ils sont arrivés à minuit.'] },
+      { title: 'Imparfait vs Passé Composé', body: `**Imparfait** — ongoing/habitual:\n• Formation: nous-form stem + -ais/-ais/-ait/-ions/-iez/-aient\n• Je lisais chaque soir. (I used to read every evening.)\n• Il faisait beau. (The weather was nice.)\n\n**Passé Composé** — completed event:\n• J'ai lu le livre. (I read the book.)\n\n**Key contrast:**\nJe dormais quand le téléphone a sonné.\n(I was sleeping when the phone rang.)`, ex: ["Quand j'étais enfant, j'habitais à Paris.", 'Il pleuvait quand nous sommes partis.', 'Elle lisait toujours avant de dormir.'] },
+    ]},
+  ],
+};
+
+export default GR;
