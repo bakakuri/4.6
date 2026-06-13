@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { ThemeProvider, useTheme } from './lib/ThemeContext.jsx'
 import { supabase } from './lib/supabase.js'
 import { getProfile, bumpSession, bumpActivity } from './utils/db.js'
-import { LANG } from './theme.js'
 
 import AuthScreen        from './components/AuthScreen.jsx'
 import LangSelect        from './components/LangSelect.jsx'
@@ -45,8 +44,11 @@ function Inner() {
   const loadProfile = async (uid) => {
     const p = await getProfile(uid)
     setProfile(p)
-    bumpSession(uid)
-    bumpActivity(uid)
+    if (p?.current_lang) {
+      // Only bump activity if lang is already set (not first-time user)
+      bumpSession(uid)
+      bumpActivity(uid)
+    }
   }
 
   const handleLogout = () => supabase.auth.signOut()
@@ -57,45 +59,59 @@ function Inner() {
     setProfile(p => ({ ...p, current_lang: lang }))
     setShowLangSel(false)
     setPage('home')
+    // Now bump session/activity after lang is set
+    bumpSession(session.user.id)
+    bumpActivity(session.user.id)
   }
 
-  // ── Guards ───────────────────────────────────────────────────
+  // ── Guards ────────────────────────────────────────────────
   if (session === undefined) return (
-    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <span style={{ fontSize: 40 }}>🌍</span>
+    <div style={{ minHeight:'100vh', background: C.bg,
+                  display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <span style={{ fontSize:40 }}>🌍</span>
     </div>
   )
-  if (!session)  return <AuthScreen />
-  if (!profile)  return (
-    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ color:C.ts, fontSize:14 }}>პროფილი იტვირთება...</div>
+  if (!session) return <AuthScreen />
+  if (!profile) return (
+    <div style={{ minHeight:'100vh', background: C.bg,
+                  display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ color: C.ts, fontSize:14 }}>პროფილი იტვირთება...</div>
     </div>
   )
-  if (!profile.current_lang || showLangSel) return <LangSelect onSelect={handleLangChange} />
+
+  // ── Force language selection for new users ────────────────
+  // isFirstTime = user never picked a language
+  const isFirstTime = !profile.current_lang
+  if (isFirstTime || showLangSel) {
+    return (
+      <LangSelect
+        onSelect={handleLangChange}
+        isFirstTime={isFirstTime}
+      />
+    )
+  }
 
   const user = { id: session.user.id, username: profile.username, isAdmin: profile.is_admin }
   const lang = profile.current_lang
 
-  // ── Full-screen pages (no Header/Nav) ────────────────────────
+  // ── Full-screen pages (no Header/Nav) ────────────────────
   if (page === 'learnedWords') {
     return (
-      <div style={{ background:C.bg, minHeight:'100vh', maxWidth:480, margin:'0 auto',
-                    color:C.t, fontFamily:"'Inter',system-ui,sans-serif", transition:'background .3s' }}>
-        <div style={{ paddingTop: 16, paddingBottom: 20 }}>
-          <LearnedWordsScreen user={user} lang={lang} onBack={() => setPage('profile')} />
-        </div>
+      <div style={{ background: C.bg, minHeight:'100vh', maxWidth:480, margin:'0 auto',
+                    color: C.t, fontFamily:"'Inter',system-ui,sans-serif", transition:'background .3s' }}>
+        <LearnedWordsScreen user={user} lang={lang} onBack={() => setPage('profile')} />
       </div>
     )
   }
 
   return (
-    <div style={{ background:C.bg, minHeight:'100vh', maxWidth:480, margin:'0 auto', position:'relative' }}>
+    <div style={{ background: C.bg, minHeight:'100vh', maxWidth:480, margin:'0 auto', position:'relative' }}>
       <Header lang={lang} onSidebar={() => setSidebarOpen(o => !o)} />
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)}
                onNav={setPage} activeCat={dictCat} onCat={setDictCat} />
 
-      <div style={{ paddingTop:56, paddingBottom:70, minHeight:'100vh', background:C.bg,
-                    color:C.t, fontFamily:"'Inter',system-ui,sans-serif",
+      <div style={{ paddingTop:56, paddingBottom:70, minHeight:'100vh', background: C.bg,
+                    color: C.t, fontFamily:"'Inter',system-ui,sans-serif",
                     overflowY:'auto', transition:'background .3s, color .3s' }}>
         {page==='home'       && <HomeScreen       user={user} lang={lang} onNav={setPage} />}
         {page==='flashcards' && <FlashcardScreen  user={user} lang={lang} />}
@@ -104,7 +120,8 @@ function Inner() {
         {page==='exercises'  && <ExercisesScreen  user={user} lang={lang} />}
         {page==='profile'    && <ProfileScreen    user={user} lang={lang} onNav={setPage} />}
         {page==='settings'   && <SettingsScreen   user={user} lang={lang}
-                                  onLangChange={() => setShowLangSel(true)} onLogout={handleLogout} />}
+                                   onLangChange={() => setShowLangSel(true)}
+                                   onLogout={handleLogout} />}
         {page==='chat'       && <ChatScreen       user={user} lang={lang} />}
         {page==='admin' && user.isAdmin && <AdminScreen lang={lang} />}
       </div>
@@ -116,4 +133,4 @@ function Inner() {
 
 export default function App() {
   return <ThemeProvider><Inner /></ThemeProvider>
-                   }
+        }
