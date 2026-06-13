@@ -1,35 +1,36 @@
+import { useState } from 'react'
+import { LANG } from '../theme.js'
 import { useTheme } from '../lib/ThemeContext.jsx'
-import { useState } from 'react';
-import { LANG } from '../theme.js';
-import GR from '../data/grammar.js';
+import GR from '../data/grammar.js'
 
-function renderBody(body) {
+function renderBody(body, C) {
   return body.split('\n').map((line, i) => {
-    if (!line.trim()) return <div key={i} style={{ height: 8 }} />;
-    // Bold line (entire line is **text**)
+    if (!line.trim()) return <div key={i} style={{ height: 8 }} />
     if (/^\*\*.*\*\*$/.test(line.trim())) {
-      return <div key={i} style={{ color: C.t, fontWeight: 700, fontSize: 14, marginTop: 10, marginBottom: 2 }}>{line.replace(/\*\*/g, '')}</div>;
+      return <div key={i} style={{ color: C.t, fontWeight: 700, fontSize: 14, marginTop: 10, marginBottom: 2 }}>{line.replace(/\*\*/g, '')}</div>
     }
-    // Line with inline bold
     if (line.includes('**')) {
-      const parts = line.split(/(\*\*.*?\*\*)/g);
+      const parts = line.split(/(\*\*.*?\*\*)/g)
       return (
         <div key={i} style={{ color: C.ts, fontSize: 14, lineHeight: 1.7, marginBottom: 2 }}>
-          {parts.map((p, j) => p.startsWith('**') ? <strong key={j} style={{ color: C.t }}>{p.replace(/\*\*/g, '')}</strong> : p)}
+          {parts.map((p, j) => p.startsWith('**')
+            ? <strong key={j} style={{ color: C.t }}>{p.replace(/\*\*/g, '')}</strong>
+            : p)}
         </div>
-      );
+      )
     }
-    return <div key={i} style={{ color: C.ts, fontSize: 14, lineHeight: 1.7, marginBottom: 2 }}>{line}</div>;
-  });
+    return <div key={i} style={{ color: C.ts, fontSize: 14, lineHeight: 1.7, marginBottom: 2 }}>{line}</div>
+  })
 }
 
 function TopicView({ cat, topic, onBack }) {
+  const { C, gls } = useTheme()
   return (
     <div style={{ padding: 16, fontFamily: "'Inter',system-ui,sans-serif" }}>
       <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '8px 14px', color: C.ts, fontSize: 14, cursor: 'pointer', marginBottom: 16, fontFamily: 'inherit' }}>← უკან</button>
       <div style={{ color: C.ts, fontSize: 12, marginBottom: 6 }}>{cat}</div>
       <div style={{ color: C.t, fontWeight: 800, fontSize: 20, marginBottom: 20 }}>{topic.title}</div>
-      <div style={{ ...gls({ padding: 20 }), marginBottom: 16 }}>{renderBody(topic.body)}</div>
+      <div style={{ ...gls({ padding: 20 }), marginBottom: 16 }}>{renderBody(topic.body, C)}</div>
       {topic.ex && (
         <div style={{ ...gls({ padding: 16 }) }}>
           <div style={{ color: C.a, fontWeight: 700, fontSize: 13, marginBottom: 12 }}>📌 მაგალითები</div>
@@ -39,10 +40,11 @@ function TopicView({ cat, topic, onBack }) {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function CategoryView({ catObj, onBack, onTopic }) {
+  const { C } = useTheme()
   return (
     <div style={{ padding: 16, fontFamily: "'Inter',system-ui,sans-serif" }}>
       <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '8px 14px', color: C.ts, fontSize: 14, cursor: 'pointer', marginBottom: 16, fontFamily: 'inherit' }}>← უკან</button>
@@ -56,17 +58,17 @@ function CategoryView({ catObj, onBack, onTopic }) {
         </button>
       ))}
     </div>
-  );
+  )
 }
 
 export default function GrammarScreen({ lang }) {
-  const { C, gls } = useTheme()
-  const [selCat,   setSelCat]   = useState(null);
-  const [selTopic, setSelTopic] = useState(null);
-  const cats = GR[lang] || GR['english'];
+  const { C } = useTheme()
+  const [selCat,   setSelCat]   = useState(null)
+  const [selTopic, setSelTopic] = useState(null)
+  const cats = GR[lang] || GR['english']
 
-  if (selCat && selTopic) return <TopicView cat={selCat.cat} topic={selTopic} onBack={() => setSelTopic(null)} />;
-  if (selCat)             return <CategoryView catObj={selCat} onBack={() => setSelCat(null)} onTopic={setSelTopic} />;
+  if (selCat && selTopic) return <TopicView cat={selCat.cat} topic={selTopic} onBack={() => setSelTopic(null)} />
+  if (selCat)             return <CategoryView catObj={selCat} onBack={() => setSelCat(null)} onTopic={setSelTopic} />
 
   return (
     <div style={{ padding: 16, fontFamily: "'Inter',system-ui,sans-serif" }}>
@@ -85,5 +87,5 @@ export default function GrammarScreen({ lang }) {
         </button>
       ))}
     </div>
-  );
+  )
 }
