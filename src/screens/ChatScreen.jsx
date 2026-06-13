@@ -1,0 +1,238 @@
+import { useState, useEffect, useRef } from 'react'
+import { useTheme } from '../lib/ThemeContext.jsx'
+import { LANG } from '../theme.js'
+import { allWords } from '../data/words.js'
+import { getChatMessages, sendChatMessage, recordCorrect, recordAnswer } from '../utils/db.js'
+import { rnd } from '../utils/helpers.js'
+import { supabase } from '../lib/supabase.js'
+
+const BOT = 'LinguaBot 🤖'
+
+export default function ChatScreen({ user, lang }) {
+  const { C } = useTheme()
+  const lc = LANG[lang]
+  const [msgs,    setMsgs]    = useState([])
+  const [inp,     setInp]     = useState('')
+  const [loading, setLoading] = useState(true)
+  const bottomRef = useRef(null)
+
+  // ── Messages visible to this user ───────────────────────────
+  // User messages → all users see them
+  // Bot messages  → only users with matching lang see them
+  const visible = msgs.filter(m =>
+    !m.is_bot || !m.lang || m.lang === lang
+  )
+
+  // Current open challenge for this language
+  const challenge = [...visible].reverse().find(m => m.is_bot && m.word_id)
+
+  // ── Load ─────────────────────────────────────────────────────
+  useEffect(() => {
+    getChatMessages(100).then(m => { setMsgs(m); setLoading(false) })
+  }, [])
+
+  // ── Realtime ──────────────────────────────────────────────────
+  useEffect(() => {
+    const ch = supabase.channel('chat_msgs')
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'chat_messages' },
+        p => setMsgs(prev => [...prev, p.new]))
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [])
+
+  // ── Scroll ────────────────────────────────────────────────────
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior:'smooth' })
+  }, [visible.length])
+
+  // ── Bot challenge (per language, deduplicated) ────────────────
+  const postChallenge = async () => {
+    // Skip if a challenge was posted for this lang in last 18s
+    try {
+      const { data } = await supabase
+        .from('chat_messages')
+        .select('created_at')
+        .eq('is_bot', true).eq('lang', lang)
+        .not('word_id', 'is', null)
+        .order('created_at', { ascending: false }).limit(1).single()
+      if (data && Date.now() - new Date(data.created_at).getTime() < 18000) return
+    } catch {}
+    const word = rnd(allWords(lang))
+    await sendChatMessage({
+      userId: null, username: BOT, isBot: true,
+      text: `${lc.flag} ახალი გამოწვევა!\nსიტყვა: "${word.w}" ${word.ph}\n🎯 პასუხისთვის დაიწყე : სიმბოლოთი`,
+      lang, wordId: word.id
+    })
+  }
+
+  useEffect(() => {
+    postChallenge()
+    const id = setInterval(postChallenge, 20000)
+    return () => clearInterval(id)
+  }, [lang]) // eslint-disable-line
+
+  // ── Send ──────────────────────────────────────────────────────
+  const sendMsg = async () => {
+    if (!inp.trim()) return
+    const text = inp.trim()
+    setInp('')
+
+    // Regular message — visible to everyone
+    await sendChatMessage({ userId: user.id, username: user.username, text })
+
+    if (text.startsWith(':') && challenge?.word_id) {
+      const answer = text.slice(1).trim()
+      const word   = allWords(lang).find(w => w.id === challenge.word_id)
+      if (word) {
+        recordAnswer(user.id)
+        const ok = answer.toLowerCase() === word.t.toLowerCase()
+        if (ok) recordCorrect(user.id)
+        const hint = word.t.slice(0, Math.ceil(word.t.length / 2)) + '...'
+        await sendChatMessage({
+          userId: null, username: BOT, isBot: true,
+          text: ok
+            ? `✅ სწორია, ${user.username}! 🎉 "${word.w}" = "${word.t}" 🔥`
+            : `❌ ${user.username}: არასწორია. მინიშნება: "${hint}"`,
+          lang, wordId: null
+        })
+      }
+    }
+  }
+
+  const fmt = ts => new Date(ts).toLocaleTimeString('ka-GE', { hour:'2-digit', minute:'2-digit' })
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 120px)',
+                  fontFamily:"'Inter',system-ui,sans-serif" }}>
+
+      {/* ── Header ─────────────────────────────────────────── */}
+      <div style={{ padding:'10px 16px', borderBottom:`1px solid ${C.bdL}`,
+                    display:'flex', alignItems:'center', gap:10 }}>
+        <span style={{ fontSize:24 }}>💬</span>
+        <div style={{ flex:1 }}>
+          <div style={{ color:C.t, fontWeight:700, fontSize:15 }}>სწავლის ჩათი</div>
+          <div style={{ color:C.ts, fontSize:11 }}>
+            {lc.flag} {lc.name} · Realtime · ყველა მომხმარებელი
+          </div>
+        </div>
+        <button onClick={postChallenge}
+          style={{ background:`${C.a}22`, border:`1px solid ${C.a}44`, borderRadius:8,
+                   padding:'5px 10px', color:C.a, fontSize:12, cursor:'pointer',
+                   fontWeight:700, fontFamily:'inherit' }}>+ ახალი</button>
+      </div>
+
+      {/* ── Hint bar ────────────────────────────────────────── */}
+      <div style={{ padding:'7px 16px', background:`${C.gold}0f`,
+                    borderBottom:`1px solid ${C.gold}22`,
+                    display:'flex', alignItems:'center', gap:6 }}>
+        <span style={{ fontSize:14 }}>💡</span>
+        <span style={{ color:C.gold, fontSize:11, lineHeight:1.4 }}>
+          პასუხი: <strong style={{ background:`${C.gold}33`, padding:'1px 5px', borderRadius:4 }}>:</strong> სიმბოლოთი დაიწყე →{' '}
+          <strong>: პარადოქსი</strong>
+          <span style={{ color:C.ts, marginLeft:6 }}>· ჩვეულებ. გაგზავნა — თავისუფლად</span>
+        </span>
+      </div>
+
+      {/* ── Messages ────────────────────────────────────────── */}
+      <div style={{ flex:1, overflowY:'auto', padding:'12px 14px',
+                    display:'flex', flexDirection:'column', gap:8 }}>
+        {loading && (
+          <div style={{ textAlign:'center', color:C.ts, paddingTop:40 }}>იტვირთება...</div>
+        )}
+
+        {visible.map(m => {
+          const isOwn   = m.user_id === user.id
+          const isBot   = m.is_bot
+          const isAnswer= !isBot && m.text?.startsWith(':')
+          const isBotQ  = isBot && m.word_id   // challenge question
+          const isBotOk = isBot && !m.word_id && m.text?.startsWith('✅')
+          const isBotBad= isBot && !m.word_id && m.text?.startsWith('❌')
+
+          return (
+            <div key={m.id} style={{ display:'flex', flexDirection:'column',
+                                     alignItems: isOwn ? 'flex-end' : 'flex-start' }}>
+              {/* Sender label */}
+              {!isOwn && (
+                <div style={{ color:C.tm, fontSize:10, marginBottom:3, paddingLeft:4 }}>
+                  {m.username} · {fmt(m.created_at)}
+                </div>
+              )}
+
+              {/* Bubble */}
+              <div style={{
+                maxWidth:'85%', padding:'10px 14px', wordBreak:'break-word',
+                whiteSpace:'pre-wrap', lineHeight:1.5, fontSize:14,
+                borderRadius: isOwn ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                color: isOwn ? '#fff' : C.t,
+                boxShadow: isOwn ? `0 2px 12px ${C.aG}` : 'none',
+                background: isOwn
+                  ? (isAnswer
+                      ? `linear-gradient(135deg,${C.g},#0fa37a)`
+                      : `linear-gradient(135deg,${C.a},${C.p})`)
+                  : isBotQ   ? `${C.a}18`
+                  : isBotOk  ? `${C.g}18`
+                  : isBotBad ? `${C.r}18`
+                  : C.card2,
+                border: isOwn ? 'none'
+                  : isBotQ  ? `1px solid ${C.a}55`
+                  : isBotOk ? `1px solid ${C.g}55`
+                  : isBotBad? `1px solid ${C.r}44`
+                  : `1px solid ${C.bdL}`,
+              }}>
+                {/* Show answer indicator */}
+                {isAnswer && (
+                  <div style={{ fontSize:11, opacity:.8, marginBottom:3 }}>
+                    ✏️ პასუხი:
+                  </div>
+                )}
+                {isAnswer ? m.text.slice(1).trim() : m.text}
+              </div>
+
+              {isOwn && (
+                <div style={{ color:C.tm, fontSize:10, marginTop:3, paddingRight:4 }}>
+                  {fmt(m.created_at)}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* ── Input ───────────────────────────────────────────── */}
+      <div style={{ padding:'10px 14px', borderTop:`1px solid ${C.bdL}`,
+                    display:'flex', gap:8, background:C.bg }}>
+        <div style={{ flex:1, position:'relative' }}>
+          <input value={inp} onChange={e => setInp(e.target.value)}
+            onKeyDown={e => e.key==='Enter' && sendMsg()}
+            placeholder={
+              inp.startsWith(':')
+                ? '🎯 ქართული თარგმანი...'
+                : 'შეტყობინება... (: პასუხისთვის)'
+            }
+            style={{
+              width:'100%', boxSizing:'border-box',
+              background: C.card3,
+              border: `1px solid ${inp.startsWith(':') ? C.g : C.bdL}`,
+              borderRadius:12, padding:'12px 14px', color:C.t,
+              fontSize:14, outline:'none', fontFamily:'inherit',
+              transition:'border-color .2s'
+            }}
+          />
+          {inp.startsWith(':') && (
+            <div style={{ position:'absolute', top:-22, left:0,
+                          color:C.g, fontSize:11, fontWeight:700 }}>
+              🎯 პასუხის რეჟიმი
+            </div>
+          )}
+        </div>
+        <button onClick={sendMsg}
+          style={{ background:`linear-gradient(135deg,${C.a},${C.p})`,
+                   border:'none', borderRadius:12, width:46, height:46,
+                   color:'#fff', fontSize:20, cursor:'pointer',
+                   display:'flex', alignItems:'center', justifyContent:'center',
+                   boxShadow:`0 2px 12px ${C.aG}`, flexShrink:0 }}>➤</button>
+      </div>
+    </div>
+  )
+}
