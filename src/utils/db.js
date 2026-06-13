@@ -1,11 +1,12 @@
-import { supabase } from '../lib/supabase.js'
+  import { supabase } from '../lib/supabase.js'
 import { allWords } from '../data/words.js'
+import { checkNewAchievements } from './gamification.js'
 
 const weekStart = () => {
   const d = new Date(); d.setDate(d.getDate() - d.getDay())
   return d.toISOString().slice(0, 10)
 }
-const today = () => new Date().toISOString().slice(0, 10)
+const today     = () => new Date().toISOString().slice(0, 10)
 const yesterday = () => new Date(Date.now() - 86400000).toISOString().slice(0, 10)
 
 // ── Word Progress ──────────────────────────────────────────────
@@ -45,7 +46,7 @@ export const getStats = async (userId, lang) => {
   const ws = allWords(lang)
   const [{ data: prog }, { data: prof }, { data: acts }] = await Promise.all([
     supabase.from('word_progress').select('mastery').eq('user_id', userId).eq('lang', lang),
-    supabase.from('profiles').select('sessions,streak,chat_correct,chat_total').eq('id', userId).single(),
+    supabase.from('profiles').select('sessions,streak,chat_correct,chat_total,xp,daily_goal,achievements').eq('id', userId).single(),
     supabase.from('activity').select('day_of_week,value').eq('user_id', userId).eq('week_start', weekStart()),
   ])
   const p       = prof || {}
@@ -59,17 +60,18 @@ export const getStats = async (userId, lang) => {
     learned, inProg, total: ws.length,
     sessions: p.sessions || 0,
     streak:   p.streak   || 0,
-    chatCorrect: chatOk,
-    totalAns: chatTot,
+    chatCorrect: chatOk, totalAns: chatTot,
     accuracy: chatTot ? Math.round((chatOk / chatTot) * 100) : null,
     activity,
+    xp:           p.xp || 0,
+    daily_goal:   p.daily_goal || 10,
+    achievements: p.achievements || [],
   }
 }
 
 // ── Profile ────────────────────────────────────────────────────
 export const getProfile = async (userId) => {
-  const { data, error } = await supabase
-    .from('profiles').select('*').eq('id', userId).single()
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
   if (error) { console.error(error); return null }
   return data
 }
@@ -94,7 +96,6 @@ export const bumpActivity = async (userId) => {
     const td   = today()
     const yd   = yesterday()
 
-    // 1. activity bar
     const { data: act } = await supabase.from('activity').select('value')
       .eq('user_id', userId).eq('day_of_week', dow).eq('week_start', week).maybeSingle()
     if (act) {
@@ -105,22 +106,59 @@ export const bumpActivity = async (userId) => {
       await supabase.from('activity').insert({ user_id: userId, day_of_week: dow, week_start: week, value: 10 })
     }
 
-    // 2. streak (requires last_active column)
-    const { data: prof } = await supabase.from('profiles')
-      .select('streak,last_active').eq('id', userId).single()
+    const { data: prof } = await supabase.from('profiles').select('streak,last_active').eq('id', userId).single()
     const last = prof?.last_active
     let streak = prof?.streak || 0
-
-    if (last === td) {
-      // already updated today — no change
-    } else if (last === yd) {
-      streak++ // consecutive day
-      await supabase.from('profiles').update({ streak, last_active: td }).eq('id', userId)
-    } else {
-      streak = 1 // first time or gap > 1 day
-      await supabase.from('profiles').update({ streak, last_active: td }).eq('id', userId)
-    }
+    if      (last === td) { /* same day, no change */ }
+    else if (last === yd) { streak++; await supabase.from('profiles').update({ streak, last_active: td }).eq('id', userId) }
+    else                  { streak = 1; await supabase.from('profiles').update({ streak, last_active: td }).eq('id', userId) }
   } catch(e) { console.error('bumpActivity', e) }
+}
+
+// ── XP ─────────────────────────────────────────────────────────
+export const awardXP = async (userId, amount) => {
+  try {
+    const { data } = await supabase.from('profiles').select('xp').eq('id', userId).single()
+    const newXp = (data?.xp || 0) + amount
+    await supabase.from('profiles').update({ xp: newXp }).eq('id', userId)
+    return newXp
+  } catch(e) { console.error('awardXP', e); return 0 }
+}
+
+// ── Achievements ───────────────────────────────────────────────
+export const updateAchievements = async (userId, stats) => {
+  try {
+    const { data } = await supabase.from('profiles')
+      .select('achievements,xp,streak').eq('id', userId).single()
+    const earned = data?.achievements || []
+    const fullStats = { ...stats, xp: data?.xp || 0, streak: data?.streak || 0 }
+    const newOnes = checkNewAchievements(fullStats, earned)
+    if (newOnes.length) {
+      await supabase.from('profiles')
+        .update({ achievements: [...earned, ...newOnes.map(a => a.id)] })
+        .eq('id', userId)
+    }
+    return newOnes
+  } catch(e) { console.error('updateAchievements', e); return [] }
+}
+
+// ── Daily Progress ─────────────────────────────────────────────
+export const getDailyLearned = async (userId, lang) => {
+  try {
+    const start = today() + 'T00:00:00'
+    const { data } = await supabase.from('word_progress').select('word_id')
+      .eq('user_id', userId).eq('lang', lang).gte('mastery', 100).gte('updated_at', start)
+    return data?.length || 0
+  } catch(e) { return 0 }
+}
+
+// ── Leaderboard ────────────────────────────────────────────────
+export const getLeaderboard = async () => {
+  try {
+    const { data } = await supabase.from('profiles')
+      .select('username, xp, streak').order('xp', { ascending: false }).limit(5)
+    return data || []
+  } catch(e) { return [] }
 }
 
 // ── Chat analytics ─────────────────────────────────────────────
@@ -131,17 +169,17 @@ export const recordCorrect = async (userId) => {
       chat_correct: (data?.chat_correct || 0) + 1,
       chat_total:   (data?.chat_total   || 0) + 1,
     }).eq('id', userId)
-  } catch(e) { console.error('recordCorrect', e) }
+  } catch(e) { console.error(e) }
 }
 export const recordAnswer = async (userId) => {
   try {
     const { data } = await supabase.from('profiles').select('chat_total').eq('id', userId).single()
     await supabase.from('profiles').update({ chat_total: (data?.chat_total || 0) + 1 }).eq('id', userId)
-  } catch(e) { console.error('recordAnswer', e) }
+  } catch(e) { console.error(e) }
 }
 
 // ── Chat messages ──────────────────────────────────────────────
-export const getChatMessages = async (limit = 60) => {
+export const getChatMessages = async (limit = 100) => {
   const { data, error } = await supabase.from('chat_messages').select('*')
     .order('created_at', { ascending:false }).limit(limit)
   if (error) { console.error(error); return [] }
@@ -155,26 +193,11 @@ export const sendChatMessage = async ({ userId, username, text, isBot=false, wor
   return data
 }
 export const clearChatMessages = async () => {
-  const { error } = await supabase.from('chat_messages').delete().gte('created_at', '1970-01-01')
-  if (error) console.error(error)
+  await supabase.from('chat_messages').delete().gte('created_at', '1970-01-01')
 }
 
 // ── Admin ──────────────────────────────────────────────────────
 export const getAllProfiles = async () => {
-  const { data, error } = await supabase.from('profiles').select('*').order('created_at')
-  if (error) { console.error(error); return [] }
+  const { data } = await supabase.from('profiles').select('*').order('created_at')
   return data || []
-}
-export const getLeaderboard = async (lang) => {
-  const { data: profiles } = await supabase.from('profiles').select('id,username,streak,chat_correct,chat_total')
-  if (!profiles?.length) return []
-  const results = await Promise.all(profiles.map(async p => {
-    const { data: prog } = await supabase.from('word_progress').select('mastery')
-      .eq('user_id', p.id).eq('lang', lang).gte('mastery', 100)
-    const learned = prog?.length || 0
-    const chatTot = p.chat_total || 0; const chatOk = p.chat_correct || 0
-    return { ...p, learned, accuracy: chatTot ? Math.round((chatOk/chatTot)*100) : 0 }
-  }))
-  return results.sort((a, b) => b.learned - a.learned)
-}
-  
+    }
