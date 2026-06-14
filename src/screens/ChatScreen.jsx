@@ -9,7 +9,6 @@ import { supabase } from '../lib/supabase.js'
 
 const BOT = 'LinguaBot 🤖'
 const HEADER_H = 56  // App-level fixed header height
-const NAV_H    = 70  // App-level bottom nav height
 
 // ═══════════════════════════════════════════════════════════
 // GroupChat — messages + input only (header lives in wrapper)
@@ -150,9 +149,8 @@ function GroupChat({ user, lang, postChallenge, challenge, setChallenge }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* ── Input — sticky above bottom nav ──────────────────── */}
+      {/* ── Input ─────────────────────────────────────────── */}
       <div style={{
-        position:'sticky', bottom:NAV_H, zIndex:40,
         padding:'10px 14px', borderTop:`1px solid ${C.bdL}`,
         display:'flex', gap:8, background:C.bg,
       }}>
@@ -305,5 +303,5 @@ export default function ChatScreen({ user, lang }) {
         : <DirectMessagesScreen user={user} />}
     </div>
   )
-        }
-                    
+}
+  
