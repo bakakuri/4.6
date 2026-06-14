@@ -11,6 +11,24 @@ const BOT      = 'LinguaBot 🤖'
 const HEADER_H = 56  // App-level fixed top header height
 const NAV_H    = 70  // App-level fixed bottom nav height
 
+// ── Measure real viewport height in px (robust against mobile
+//    browser toolbar show/hide, avoids vh/dvh inconsistencies) ──
+function useViewportHeight() {
+  const [h, setH] = useState(() =>
+    window.visualViewport?.height || window.innerHeight)
+  useEffect(() => {
+    const update = () => setH(window.visualViewport?.height || window.innerHeight)
+    update()
+    window.visualViewport?.addEventListener('resize', update)
+    window.addEventListener('resize', update)
+    return () => {
+      window.visualViewport?.removeEventListener('resize', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+  return h
+}
+
 // ═══════════════════════════════════════════════════════════
 // GroupChat — fills 100% height: messages(scroll) + input(static)
 // ═══════════════════════════════════════════════════════════
@@ -192,6 +210,7 @@ function GroupChat({ user, lang, postChallenge, challenge, setChallenge }) {
 export default function ChatScreen({ user, lang }) {
   const { C } = useTheme()
   const lc = LANG[lang]
+  const vh = useViewportHeight()
   const [tab,       setTab]       = useState('group')
   const [unread,    setUnread]    = useState(0)
   const [challenge, setChallenge] = useState(null)
@@ -228,7 +247,7 @@ export default function ChatScreen({ user, lang }) {
   }, [lang]) // eslint-disable-line
 
   return (
-    <div style={{ height:`calc(100dvh - ${HEADER_H + NAV_H}px)`,
+    <div style={{ height:`${Math.max(300, vh - HEADER_H - NAV_H)}px`,
                   display:'flex', flexDirection:'column',
                   fontFamily:"'Inter',system-ui,sans-serif" }}>
 
