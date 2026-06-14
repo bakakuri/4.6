@@ -200,4 +200,65 @@ export const clearChatMessages = async () => {
 export const getAllProfiles = async () => {
   const { data } = await supabase.from('profiles').select('*').order('created_at')
   return data || []
-    }
+}
+
+// ── Direct Messages ──────────────────────────────────────────
+export const getDmUsers = async (myId) => {
+  // All profiles except self
+  const { data: profiles } = await supabase
+    .from('profiles').select('id,username,photo_url').neq('id', myId)
+  if (!profiles?.length) return []
+
+  // Last message + unread count per conversation
+  const results = await Promise.all(profiles.map(async p => {
+    const { data: msgs } = await supabase
+      .from('direct_messages').select('text,sender_id,receiver_id,read,created_at')
+      .or(`and(sender_id.eq.${myId},receiver_id.eq.${p.id}),and(sender_id.eq.${p.id},receiver_id.eq.${myId})`)
+      .order('created_at', { ascending: false }).limit(20)
+
+    const last = msgs?.[0]
+    const unread = (msgs || []).filter(m => m.receiver_id === myId && !m.read).length
+    return { ...p, lastMsg: last?.text || null, lastTime: last?.created_at || null, unread }
+  }))
+
+  // Sort: unread first, then by last message time, then alphabetically
+  return results.sort((a, b) => {
+    if (a.unread !== b.unread) return b.unread - a.unread
+    if (a.lastTime && b.lastTime) return new Date(b.lastTime) - new Date(a.lastTime)
+    if (a.lastTime) return -1
+    if (b.lastTime) return 1
+    return a.username.localeCompare(b.username)
+  })
+}
+
+export const getDmThread = async (myId, otherId) => {
+  const { data, error } = await supabase
+    .from('direct_messages').select('*')
+    .or(`and(sender_id.eq.${myId},receiver_id.eq.${otherId}),and(sender_id.eq.${otherId},receiver_id.eq.${myId})`)
+    .order('created_at', { ascending: true })
+  if (error) { console.error(error); return [] }
+  return data || []
+}
+
+export const sendDm = async (senderId, receiverId, text) => {
+  const { data, error } = await supabase
+    .from('direct_messages')
+    .insert({ sender_id: senderId, receiver_id: receiverId, text })
+    .select().single()
+  if (error) { console.error(error); return null }
+  return data
+}
+
+export const markDmRead = async (myId, otherId) => {
+  await supabase.from('direct_messages')
+    .update({ read: true })
+    .eq('sender_id', otherId).eq('receiver_id', myId).eq('read', false)
+}
+
+export const getTotalUnreadDms = async (myId) => {
+  const { count } = await supabase
+    .from('direct_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('receiver_id', myId).eq('read', false)
+  return count || 0
+      }
