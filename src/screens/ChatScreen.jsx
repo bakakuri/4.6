@@ -228,7 +228,7 @@ export default function ChatScreen({ user, lang }) {
   }, [lang]) // eslint-disable-line
 
   return (
-    <div style={{ height:`calc(100vh - ${HEADER_H + NAV_H}px)`,
+    <div style={{ height:`calc(100dvh - ${HEADER_H + NAV_H}px)`,
                   display:'flex', flexDirection:'column',
                   fontFamily:"'Inter',system-ui,sans-serif" }}>
 
