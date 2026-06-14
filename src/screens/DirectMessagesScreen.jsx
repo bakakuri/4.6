@@ -101,6 +101,10 @@ function Thread({ user, other, onBack }) {
                     display:'flex', gap:8, background:C.bg }}>
         <input value={inp} onChange={e=>setInp(e.target.value)}
           onKeyDown={e=>e.key==='Enter' && send()}
+          name="dm-message" type="text"
+          autoComplete="off" autoCorrect="off"
+          autoCapitalize="sentences" spellCheck="false"
+          data-lpignore="true" data-1p-ignore data-form-type="other"
           placeholder="შეტყობინება..."
           style={{ flex:1, boxSizing:'border-box', background:C.card3, border:`1px solid ${C.bdL}`,
                    borderRadius:12, padding:'12px 14px', color:C.t, fontSize:14, outline:'none',
