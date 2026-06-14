@@ -13,8 +13,11 @@ export default function SettingsScreen({ user, lang, onLangChange, onLogout }) {
     setBusy(true)
     // Delete all word progress for this user
     await supabase.from('word_progress').delete().eq('user_id', user.id)
-    // Reset analytics in profile
-    await supabase.from('profiles').update({ sessions: 0, streak: 0, chat_correct: 0, chat_total: 0 }).eq('id', user.id)
+    // Reset analytics + gamification in profile
+    await supabase.from('profiles').update({
+      sessions: 0, streak: 0, chat_correct: 0, chat_total: 0,
+      xp: 0, achievements: [], last_active: null,
+    }).eq('id', user.id)
     // Delete activity
     await supabase.from('activity').delete().eq('user_id', user.id)
     setConfirm(false); setDone(true); setBusy(false)
@@ -69,7 +72,14 @@ export default function SettingsScreen({ user, lang, onLangChange, onLogout }) {
           ? <button onClick={() => setConfirm(true)}
               style={{ width: '100%', padding: '13px 0', background: `${C.r}22`, border: `1px solid ${C.r}55`, borderRadius: 12, color: C.r, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🗑️ პროგრესის გაწმენდა</button>
           : <div>
-              <div style={{ color: C.ts, fontSize: 13, marginBottom: 12, textAlign: 'center' }}>დარწმუნებული ხარ? ყველა პროგრესი Supabase-დანაც წაიშლება!</div>
+              <div style={{ color: C.ts, fontSize: 13, marginBottom: 6, textAlign: 'center', fontWeight: 700 }}>
+                დარწმუნებული ხარ?
+              </div>
+              <div style={{ color: C.ts, fontSize: 12, marginBottom: 12, textAlign: 'center', lineHeight: 1.6 }}>
+                წაიშლება: ნასწავლი სიტყვები, XP, Level,<br/>
+                Streak, მიღწევები, სესიები, ჩათის სტატ.,<br/>
+                კვირის აქტივობა — ყველაფერი!
+              </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setConfirm(false)} style={{ flex: 1, padding: '12px 0', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, color: C.ts, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>გაუქმება</button>
                 <button onClick={clearData} disabled={busy} style={{ flex: 1, padding: '12px 0', background: C.r, border: 'none', borderRadius: 10, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{busy ? '...' : 'წაშლა ✓'}</button>
