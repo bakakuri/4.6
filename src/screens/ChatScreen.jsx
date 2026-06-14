@@ -7,11 +7,12 @@ import DirectMessagesScreen from './DirectMessagesScreen.jsx'
 import { rnd } from '../utils/helpers.js'
 import { supabase } from '../lib/supabase.js'
 
-const BOT = 'LinguaBot 🤖'
-const HEADER_H = 56  // App-level fixed header height
+const BOT      = 'LinguaBot 🤖'
+const HEADER_H = 56  // App-level fixed top header height
+const NAV_H    = 70  // App-level fixed bottom nav height
 
 // ═══════════════════════════════════════════════════════════
-// GroupChat — messages + input only (header lives in wrapper)
+// GroupChat — fills 100% height: messages(scroll) + input(static)
 // ═══════════════════════════════════════════════════════════
 function GroupChat({ user, lang, postChallenge, challenge, setChallenge }) {
   const { C } = useTheme()
@@ -20,21 +21,17 @@ function GroupChat({ user, lang, postChallenge, challenge, setChallenge }) {
   const [loading, setLoading] = useState(true)
   const bottomRef = useRef(null)
 
-  // Messages visible to this user
   const visible = msgs.filter(m => !m.is_bot || !m.lang || m.lang === lang)
 
-  // Keep wrapper informed of the current open challenge (for header button state, if needed)
   useEffect(() => {
     const c = [...visible].reverse().find(m => m.is_bot && m.word_id)
     setChallenge?.(c)
   }, [visible]) // eslint-disable-line
 
-  // ── Load ─────────────────────────────────────────────────────
   useEffect(() => {
     getChatMessages(100).then(m => { setMsgs(m); setLoading(false) })
   }, [])
 
-  // ── Realtime ──────────────────────────────────────────────────
   useEffect(() => {
     const ch = supabase.channel('chat_msgs')
       .on('postgres_changes', { event:'INSERT', schema:'public', table:'chat_messages' },
@@ -43,19 +40,16 @@ function GroupChat({ user, lang, postChallenge, challenge, setChallenge }) {
     return () => supabase.removeChannel(ch)
   }, [])
 
-  // ── Scroll ────────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior:'smooth', block:'end' })
   }, [visible.length])
 
-  // ── Auto-post challenges ────────────────────────────────────────
   useEffect(() => {
     postChallenge()
     const id = setInterval(postChallenge, 20000)
     return () => clearInterval(id)
   }, [postChallenge])
 
-  // ── Send ──────────────────────────────────────────────────────
   const sendMsg = async () => {
     if (!inp.trim()) return
     const text = inp.trim()
@@ -85,10 +79,12 @@ function GroupChat({ user, lang, postChallenge, challenge, setChallenge }) {
   const fmt = ts => new Date(ts).toLocaleTimeString('ka-GE', { hour:'2-digit', minute:'2-digit' })
 
   return (
-    <div style={{ fontFamily:"'Inter',system-ui,sans-serif" }}>
-      {/* ── Messages ────────────────────────────────────────── */}
-      <div style={{ padding:'12px 14px', display:'flex', flexDirection:'column', gap:8,
-                    minHeight:'40vh' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%',
+                  fontFamily:"'Inter',system-ui,sans-serif" }}>
+
+      {/* ── Messages — scrollable ─────────────────────────────── */}
+      <div style={{ flex:1, minHeight:0, overflowY:'auto', padding:'12px 14px',
+                    display:'flex', flexDirection:'column', gap:8 }}>
         {loading && (
           <div style={{ textAlign:'center', color:C.ts, paddingTop:40 }}>იტვირთება...</div>
         )}
@@ -149,11 +145,9 @@ function GroupChat({ user, lang, postChallenge, challenge, setChallenge }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* ── Input ─────────────────────────────────────────── */}
-      <div style={{
-        padding:'10px 14px', borderTop:`1px solid ${C.bdL}`,
-        display:'flex', gap:8, background:C.bg,
-      }}>
+      {/* ── Input — static, always visible ───────────────────── */}
+      <div style={{ flexShrink:0, padding:'10px 14px', borderTop:`1px solid ${C.bdL}`,
+                    display:'flex', gap:8, background:C.bg }}>
         <div style={{ flex:1, position:'relative' }}>
           <input value={inp} onChange={e => setInp(e.target.value)}
             onKeyDown={e => e.key==='Enter' && sendMsg()}
@@ -190,13 +184,16 @@ function GroupChat({ user, lang, postChallenge, challenge, setChallenge }) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// Wrapper — Tabs (sticky) + Group/DM content
+// Wrapper — fixed-height flex column.
+// Tabs + (group) header/hint = static (always visible).
+// Content area = flex:1, fills remaining space; internal scroll
+// is handled by GroupChat / DirectMessagesScreen themselves.
 // ═══════════════════════════════════════════════════════════
 export default function ChatScreen({ user, lang }) {
   const { C } = useTheme()
   const lc = LANG[lang]
-  const [tab,     setTab]     = useState('group')
-  const [unread,  setUnread]  = useState(0)
+  const [tab,       setTab]       = useState('group')
+  const [unread,    setUnread]    = useState(0)
   const [challenge, setChallenge] = useState(null)
 
   // ── Unread DM badge ──────────────────────────────────────────
@@ -231,77 +228,75 @@ export default function ChatScreen({ user, lang }) {
   }, [lang]) // eslint-disable-line
 
   return (
-    <div style={{ fontFamily:"'Inter',system-ui,sans-serif" }}>
+    <div style={{ height:`calc(100vh - ${HEADER_H + NAV_H}px)`,
+                  display:'flex', flexDirection:'column',
+                  fontFamily:"'Inter',system-ui,sans-serif" }}>
 
-      {/* ══ STICKY: Tabs + (group) header + hint ══════════════ */}
-      <div style={{ position:'sticky', top:HEADER_H, zIndex:40,
-                    background:C.bg }}>
-
-        {/* Tabs */}
-        <div style={{ display:'flex', gap:6, padding:'10px 14px 0',
-                      borderBottom:`1px solid ${C.bdL}` }}>
-          {[
-            { id:'group', label:'💬 საერთო ჩათი' },
-            { id:'dm',    label:'✉️ პირადი' },
-          ].map(t => (
-            <button key={t.id} onClick={() => { setTab(t.id); if (t.id==='dm') setUnread(0) }}
-              style={{ flex:1, padding:'9px 0', borderRadius:'10px 10px 0 0', cursor:'pointer',
-                       border:'none', borderBottom: tab===t.id ? `2px solid ${C.a}` : `2px solid transparent`,
-                       marginBottom:-1,
-                       background: tab===t.id ? C.card2 : 'transparent',
-                       color: tab===t.id ? C.t : C.ts, fontWeight: tab===t.id ? 700 : 400,
-                       fontSize:13, fontFamily:'inherit', position:'relative',
-                       display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-              {t.label}
-              {t.id==='dm' && unread>0 && (
-                <span style={{ background:`linear-gradient(135deg,${C.a},${C.p})`, borderRadius:8,
-                              minWidth:18, height:18, padding:'0 5px', display:'flex', alignItems:'center',
-                              justifyContent:'center', color:'#fff', fontSize:10, fontWeight:800 }}>
-                  {unread}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* GroupChat header + hint — only on group tab */}
-        {tab === 'group' && (
-          <>
-            <div style={{ padding:'10px 16px', borderBottom:`1px solid ${C.bdL}`,
-                          display:'flex', alignItems:'center', gap:10, background:C.bg }}>
-              <span style={{ fontSize:24 }}>💬</span>
-              <div style={{ flex:1 }}>
-                <div style={{ color:C.t, fontWeight:700, fontSize:15 }}>სწავლის ჩათი</div>
-                <div style={{ color:C.ts, fontSize:11 }}>
-                  {lc.flag} {lc.name} · Realtime · ყველა მომხმარებელი
-                </div>
-              </div>
-              <button onClick={postChallenge}
-                style={{ background:`${C.a}22`, border:`1px solid ${C.a}44`, borderRadius:8,
-                         padding:'5px 10px', color:C.a, fontSize:12, cursor:'pointer',
-                         fontWeight:700, fontFamily:'inherit' }}>+ ახალი</button>
-            </div>
-
-            <div style={{ padding:'7px 16px', background:`${C.gold}0f`,
-                          borderBottom:`1px solid ${C.gold}22`,
-                          display:'flex', alignItems:'center', gap:6 }}>
-              <span style={{ fontSize:14 }}>💡</span>
-              <span style={{ color:C.gold, fontSize:11, lineHeight:1.4 }}>
-                პასუხი: <strong style={{ background:`${C.gold}33`, padding:'1px 5px', borderRadius:4 }}>:</strong> სიმბოლოთი დაიწყე →{' '}
-                <strong>: პარადოქსი</strong>
-                <span style={{ color:C.ts, marginLeft:6 }}>· ჩვეულებ. გაგზავნა — თავისუფლად</span>
+      {/* ── Tabs — static ──────────────────────────────────── */}
+      <div style={{ flexShrink:0, display:'flex', gap:6, padding:'10px 14px 0',
+                    borderBottom:`1px solid ${C.bdL}` }}>
+        {[
+          { id:'group', label:'💬 საერთო ჩათი' },
+          { id:'dm',    label:'✉️ პირადი' },
+        ].map(t => (
+          <button key={t.id} onClick={() => { setTab(t.id); if (t.id==='dm') setUnread(0) }}
+            style={{ flex:1, padding:'9px 0', borderRadius:'10px 10px 0 0', cursor:'pointer',
+                     border:'none', borderBottom: tab===t.id ? `2px solid ${C.a}` : `2px solid transparent`,
+                     marginBottom:-1,
+                     background: tab===t.id ? C.card2 : 'transparent',
+                     color: tab===t.id ? C.t : C.ts, fontWeight: tab===t.id ? 700 : 400,
+                     fontSize:13, fontFamily:'inherit', position:'relative',
+                     display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+            {t.label}
+            {t.id==='dm' && unread>0 && (
+              <span style={{ background:`linear-gradient(135deg,${C.a},${C.p})`, borderRadius:8,
+                            minWidth:18, height:18, padding:'0 5px', display:'flex', alignItems:'center',
+                            justifyContent:'center', color:'#fff', fontSize:10, fontWeight:800 }}>
+                {unread}
               </span>
-            </div>
-          </>
-        )}
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* ══ CONTENT ════════════════════════════════════════════ */}
-      {tab==='group'
-        ? <GroupChat user={user} lang={lang} postChallenge={postChallenge}
-                     challenge={challenge} setChallenge={setChallenge} />
-        : <DirectMessagesScreen user={user} />}
+      {/* ── Group header + hint — static, only on group tab ──── */}
+      {tab === 'group' && (
+        <div style={{ flexShrink:0 }}>
+          <div style={{ padding:'10px 16px', borderBottom:`1px solid ${C.bdL}`,
+                        display:'flex', alignItems:'center', gap:10 }}>
+            <span style={{ fontSize:24 }}>💬</span>
+            <div style={{ flex:1 }}>
+              <div style={{ color:C.t, fontWeight:700, fontSize:15 }}>სწავლის ჩათი</div>
+              <div style={{ color:C.ts, fontSize:11 }}>
+                {lc.flag} {lc.name} · Realtime · ყველა მომხმარებელი
+              </div>
+            </div>
+            <button onClick={postChallenge}
+              style={{ background:`${C.a}22`, border:`1px solid ${C.a}44`, borderRadius:8,
+                       padding:'5px 10px', color:C.a, fontSize:12, cursor:'pointer',
+                       fontWeight:700, fontFamily:'inherit' }}>+ ახალი</button>
+          </div>
+
+          <div style={{ padding:'7px 16px', background:`${C.gold}0f`,
+                        borderBottom:`1px solid ${C.gold}22`,
+                        display:'flex', alignItems:'center', gap:6 }}>
+            <span style={{ fontSize:14 }}>💡</span>
+            <span style={{ color:C.gold, fontSize:11, lineHeight:1.4 }}>
+              პასუხი: <strong style={{ background:`${C.gold}33`, padding:'1px 5px', borderRadius:4 }}>:</strong> სიმბოლოთი დაიწყე →{' '}
+              <strong>: პარადოქსი</strong>
+              <span style={{ color:C.ts, marginLeft:6 }}>· ჩვეულებ. გაგზავნა — თავისუფლად</span>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Content — fills remaining height ─────────────────── */}
+      <div style={{ flex:1, minHeight:0, overflow:'hidden' }}>
+        {tab==='group'
+          ? <GroupChat user={user} lang={lang} postChallenge={postChallenge}
+                       challenge={challenge} setChallenge={setChallenge} />
+          : <DirectMessagesScreen user={user} />}
+      </div>
     </div>
   )
 }
-  
