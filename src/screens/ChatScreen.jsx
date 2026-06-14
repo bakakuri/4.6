@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import { useTheme } from '../lib/ThemeContext.jsx'
 import { LANG } from '../theme.js'
 import { allWords } from '../data/words.js'
-import { getChatMessages, sendChatMessage, recordCorrect, recordAnswer } from '../utils/db.js'
+import { getChatMessages, sendChatMessage, recordCorrect, recordAnswer, getTotalUnreadDms } from '../utils/db.js'
+import DirectMessagesScreen from './DirectMessagesScreen.jsx'
 import { rnd } from '../utils/helpers.js'
 import { supabase } from '../lib/supabase.js'
 
 const BOT = 'LinguaBot 🤖'
 
-export default function ChatScreen({ user, lang }) {
+function GroupChat({ user, lang }) {
   const { C } = useTheme()
   const lc = LANG[lang]
   const [msgs,    setMsgs]    = useState([])
@@ -233,6 +234,60 @@ export default function ChatScreen({ user, lang }) {
                    display:'flex', alignItems:'center', justifyContent:'center',
                    boxShadow:`0 2px 12px ${C.aG}`, flexShrink:0 }}>➤</button>
       </div>
+    </div>
+  )
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// Wrapper — Group Chat vs Direct Messages tabs
+// ═══════════════════════════════════════════════════════════
+export default function ChatScreen({ user, lang }) {
+  const { C } = useTheme()
+  const [tab, setTab] = useState('group')
+  const [unread, setUnread] = useState(0)
+
+  useEffect(() => {
+    const load = () => getTotalUnreadDms(user.id).then(setUnread)
+    load()
+    const ch = supabase.channel('dm_unread_badge')
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'direct_messages' },
+        p => { if (p.new.receiver_id === user.id) load() })
+      .subscribe()
+    const id = setInterval(load, 15000)
+    return () => { supabase.removeChannel(ch); clearInterval(id) }
+  }, [user.id])
+
+  return (
+    <div style={{ fontFamily:"'Inter',system-ui,sans-serif" }}>
+      {/* Tabs */}
+      <div style={{ display:'flex', gap:6, padding:'10px 14px 0' }}>
+        {[
+          { id:'group', label:'💬 საერთო ჩათი' },
+          { id:'dm',    label:'✉️ პირადი' },
+        ].map(t => (
+          <button key={t.id} onClick={() => { setTab(t.id); if (t.id==='dm') setUnread(0) }}
+            style={{ flex:1, padding:'9px 0', borderRadius:'10px 10px 0 0', cursor:'pointer',
+                     border:'none', borderBottom: tab===t.id ? `2px solid ${C.a}` : `2px solid transparent`,
+                     background: tab===t.id ? C.card2 : 'transparent',
+                     color: tab===t.id ? C.t : C.ts, fontWeight: tab===t.id ? 700 : 400,
+                     fontSize:13, fontFamily:'inherit', position:'relative',
+                     display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+            {t.label}
+            {t.id==='dm' && unread>0 && (
+              <span style={{ background:`linear-gradient(135deg,${C.a},${C.p})`, borderRadius:8,
+                            minWidth:18, height:18, padding:'0 5px', display:'flex', alignItems:'center',
+                            justifyContent:'center', color:'#fff', fontSize:10, fontWeight:800 }}>
+                {unread}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab==='group'
+        ? <GroupChat user={user} lang={lang} />
+        : <DirectMessagesScreen user={user} />}
     </div>
   )
 }
