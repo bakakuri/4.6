@@ -44,7 +44,7 @@ function Thread({ user, other, onBack }) {
   const fmt = ts => new Date(ts).toLocaleTimeString('ka-GE', { hour:'2-digit', minute:'2-digit' })
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 120px)',
+    <div style={{ display:'flex', flexDirection:'column', height:'100%',
                   fontFamily:"'Inter',system-ui,sans-serif" }}>
       {/* Header */}
       <div style={{ padding:'10px 16px', borderBottom:`1px solid ${C.bdL}`,
@@ -155,7 +155,8 @@ export default function DirectMessagesScreen({ user }) {
   }
 
   return (
-    <div style={{ padding:'12px 14px 20px', fontFamily:"'Inter',system-ui,sans-serif" }}>
+    <div style={{ height:'100%', overflowY:'auto', boxSizing:'border-box',
+                  padding:'12px 14px 20px', fontFamily:"'Inter',system-ui,sans-serif" }}>
       <div style={{ marginBottom:14 }}>
         <div style={{ color:C.t, fontWeight:800, fontSize:18 }}>✉️ პირადი მიმოწერა</div>
         <div style={{ color:C.ts, fontSize:12, marginTop:2 }}>
