@@ -1,4 +1,4 @@
-  import { supabase } from '../lib/supabase.js'
+import { supabase } from '../lib/supabase.js'
 import { allWords } from '../data/words.js'
 import { checkNewAchievements } from './gamification.js'
 
