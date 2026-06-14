@@ -17,7 +17,7 @@ export default function AdminScreen({ lang }) {
       setLoading(true)
       const [ps, lb, { data: msgs }] = await Promise.all([
         getAllProfiles(),
-        getLeaderboard(lang),
+        getLeaderboard(),
         supabase.from('chat_messages').select('*').order('created_at', { ascending: false }).limit(20)
       ])
       setProfiles(ps)
@@ -76,15 +76,16 @@ export default function AdminScreen({ lang }) {
                 </div>
                 <div style={{ color: C.ts, fontSize: 11 }}>{new Date(p.created_at).toLocaleDateString('ka-GE')}</div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6 }}>
                 {[
+                  { label: 'XP',      val: p.xp || 0, col: C.gold },
                   { label: 'სესია',   val: p.sessions      },
                   { label: 'სტრიქი', val: `${p.streak}🔥` },
                   { label: 'ენა',     val: p.current_lang?.slice(0,3) || '—' },
                 ].map(s => (
-                  <div key={s.label} style={{ background: C.card3, borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ color: C.a, fontWeight: 800, fontSize: 14 }}>{s.val}</div>
-                    <div style={{ color: C.ts, fontSize: 10 }}>{s.label}</div>
+                  <div key={s.label} style={{ background: C.card3, borderRadius: 8, padding: '8px 6px', textAlign: 'center' }}>
+                    <div style={{ color: s.col || C.a, fontWeight: 800, fontSize: 13 }}>{s.val}</div>
+                    <div style={{ color: C.ts, fontSize: 9 }}>{s.label}</div>
                   </div>
                 ))}
               </div>
@@ -96,17 +97,17 @@ export default function AdminScreen({ lang }) {
       {/* Leaderboard */}
       {tab === 'stats' && (
         <div>
-          <div style={{ color: C.t, fontWeight: 700, fontSize: 15, marginBottom: 12 }}>🏆 ლიდერბორდი</div>
+          <div style={{ color: C.t, fontWeight: 700, fontSize: 15, marginBottom: 12 }}>🏆 ლიდერბორდი (XP)</div>
           {leaders.map((u, i) => (
-            <div key={u.id} style={{ ...gls({ padding: '12px 16px', marginBottom: 8 }), display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div key={u.username} style={{ ...gls({ padding: '12px 16px', marginBottom: 8 }), display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: i === 0 ? C.gold : i === 1 ? '#9ba3af' : '#cd7c3a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 13 }}>{i + 1}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ color: C.t, fontWeight: 700, fontSize: 14 }}>{u.username}</div>
-                <div style={{ color: C.ts, fontSize: 11 }}>🔥{u.streak} · 🎯{u.accuracy}%</div>
+                <div style={{ color: C.ts, fontSize: 11 }}>🔥 {u.streak || 0} დღე streak</div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ color: C.g, fontWeight: 900, fontSize: 16 }}>{u.learned}</div>
-                <div style={{ color: C.ts, fontSize: 10 }}>ნასწავლი</div>
+                <div style={{ color: C.gold, fontWeight: 900, fontSize: 16 }}>{u.xp || 0}</div>
+                <div style={{ color: C.ts, fontSize: 10 }}>XP</div>
               </div>
             </div>
           ))}
