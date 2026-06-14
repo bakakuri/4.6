@@ -11,19 +11,43 @@ const BOT      = 'LinguaBot 🤖'
 const HEADER_H = 56  // App-level fixed top header height
 const NAV_H    = 70  // App-level fixed bottom nav height
 
-// ── Measure real viewport height in px (robust against mobile
-//    browser toolbar show/hide, avoids vh/dvh inconsistencies) ──
+// ── Measure real viewport height in px, ignoring on-screen-keyboard
+//    shrinkage (which fires resize/visualViewport events with a SMALLER
+//    height). We track the largest height seen and only shrink on
+//    orientation change (width change) — keyboard-only height drops
+//    are ignored so the layout doesn't collapse/gap when typing. ──
 function useViewportHeight() {
-  const [h, setH] = useState(() =>
-    window.visualViewport?.height || window.innerHeight)
+  const getH = () => window.visualViewport?.height || window.innerHeight
+  const [h, setH] = useState(getH)
+  const maxHRef = useRef(getH())
+  const widthRef = useRef(window.innerWidth)
+
   useEffect(() => {
-    const update = () => setH(window.visualViewport?.height || window.innerHeight)
+    const update = () => {
+      const cur = getH()
+      const curW = window.innerWidth
+      if (curW !== widthRef.current) {
+        // Real resize / orientation change — reset baseline
+        widthRef.current = curW
+        maxHRef.current = cur
+        setH(cur)
+        return
+      }
+      if (cur >= maxHRef.current) {
+        maxHRef.current = cur
+        setH(cur)
+      }
+      // else: height shrank with same width → likely the on-screen
+      // keyboard opening; keep the previous (larger) height.
+    }
     update()
     window.visualViewport?.addEventListener('resize', update)
     window.addEventListener('resize', update)
+    window.addEventListener('orientationchange', update)
     return () => {
       window.visualViewport?.removeEventListener('resize', update)
       window.removeEventListener('resize', update)
+      window.removeEventListener('orientationchange', update)
     }
   }, [])
   return h
@@ -169,6 +193,10 @@ function GroupChat({ user, lang, postChallenge, challenge, setChallenge }) {
         <div style={{ flex:1, position:'relative' }}>
           <input value={inp} onChange={e => setInp(e.target.value)}
             onKeyDown={e => e.key==='Enter' && sendMsg()}
+            name="chat-message" type="text"
+            autoComplete="off" autoCorrect="off"
+            autoCapitalize="sentences" spellCheck="false"
+            data-lpignore="true" data-1p-ignore data-form-type="other"
             placeholder={
               inp.startsWith(':')
                 ? '🎯 ქართული თარგმანი...'
@@ -318,4 +346,5 @@ export default function ChatScreen({ user, lang }) {
       </div>
     </div>
   )
-}
+                                              }
+        
