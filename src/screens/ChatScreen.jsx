@@ -77,16 +77,18 @@ export default function ChatScreen({ user, lang }) {
   }, [user.id])
 
   // ── Bot challenge poster ──────────────────────────────────────
-  const postChallenge = useCallback(async () => {
-    try {
-      const { data } = await supabase
-        .from('chat_messages')
-        .select('created_at')
-        .eq('is_bot', true).eq('lang', lang)
-        .not('word_id', 'is', null)
-        .order('created_at', { ascending: false }).limit(1).single()
-      if (data && Date.now() - new Date(data.created_at).getTime() < 18000) return
-    } catch {}
+  const postChallenge = useCallback(async (force = false) => {
+    if (!force) {
+      try {
+        const { data } = await supabase
+          .from('chat_messages')
+          .select('created_at')
+          .eq('is_bot', true).eq('lang', lang)
+          .not('word_id', 'is', null)
+          .order('created_at', { ascending: false }).limit(1).single()
+        if (data && Date.now() - new Date(data.created_at).getTime() < 18000) return
+      } catch {}
+    }
     const word = rnd(allWords(lang))
     await sendChatMessage({
       userId: null, username: BOT, isBot: true,
@@ -97,7 +99,7 @@ export default function ChatScreen({ user, lang }) {
 
   useEffect(() => {
     postChallenge()
-    const id = setInterval(postChallenge, 20000)
+    const id = setInterval(() => postChallenge(false), 20000)
     return () => clearInterval(id)
   }, [postChallenge])
 
@@ -179,7 +181,7 @@ export default function ChatScreen({ user, lang }) {
                   {lc.flag} {lc.name} · Realtime · ყველა მომხმარებელი
                 </div>
               </div>
-              <button onClick={postChallenge}
+              <button onClick={() => postChallenge(true)}
                 style={{ background:`${C.a}22`, border:`1px solid ${C.a}44`, borderRadius:8,
                          padding:'5px 10px', color:C.a, fontSize:12, cursor:'pointer',
                          fontWeight:700, fontFamily:'inherit' }}>+ ახალი</button>
@@ -200,12 +202,12 @@ export default function ChatScreen({ user, lang }) {
       </div>
 
       {/* Spacer so content starts below the fixed top bar */}
-      <div style={{ height:topH }} />
+      <div style={{ height:topH + 2 }} />
 
       {/* ══ CONTENT ════════════════════════════════════════════ */}
       {tab === 'group' ? (
         <div style={{ padding:'12px 14px', display:'flex', flexDirection:'column', gap:8,
-                      paddingBottom: effectiveInputH + 12 }}>
+                      paddingBottom: effectiveInputH + NAV_H + 16 }}>
           {loading && (
             <div style={{ textAlign:'center', color:C.ts, paddingTop:40 }}>იტვირთება...</div>
           )}
@@ -312,5 +314,4 @@ export default function ChatScreen({ user, lang }) {
       )}
     </div>
   )
-                         }
-                
+}
