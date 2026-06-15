@@ -39,7 +39,7 @@ export default function ChatScreen({ user, lang }) {
 
   const [topRef,   topH]   = useMeasuredHeight()
   const [inputRef, inputH] = useMeasuredHeight()
-  const bottomRef = useRef(null)
+  const messagesRef = useRef(null)
 
   const visible = msgs.filter(m => !m.is_bot || !m.lang || m.lang === lang)
   const challenge = [...visible].reverse().find(m => m.is_bot && m.word_id)
@@ -61,8 +61,10 @@ export default function ChatScreen({ user, lang }) {
 
   // ── Scroll to bottom on new messages / tab switch ────────────
   useEffect(() => {
-    if (tab === 'group') bottomRef.current?.scrollIntoView({ behavior:'smooth', block:'end' })
-  }, [visible.length, tab])
+    if (tab === 'group' && messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight
+    }
+  }, [visible.length, tab, inputH, topH])
 
   // ── Unread DM badge ──────────────────────────────────────────
   useEffect(() => {
@@ -201,13 +203,15 @@ export default function ChatScreen({ user, lang }) {
         )}
       </div>
 
-      {/* Spacer so content starts below the fixed top bar */}
-      <div style={{ height:topH + 2 }} />
-
       {/* ══ CONTENT ════════════════════════════════════════════ */}
       {tab === 'group' ? (
-        <div style={{ padding:'12px 14px', display:'flex', flexDirection:'column', gap:8,
-                      paddingBottom: effectiveInputH + NAV_H + 16 }}>
+        <div ref={messagesRef} style={{
+          position:'fixed', left:0, right:0, maxWidth:fixedBarStyle.maxWidth, margin:'0 auto',
+          top: HEADER_H + topH + 2,
+          bottom: NAV_H + effectiveInputH,
+          overflowY:'auto', overflowAnchor:'none',
+          padding:'12px 14px', display:'flex', flexDirection:'column', gap:8,
+        }}>
           {loading && (
             <div style={{ textAlign:'center', color:C.ts, paddingTop:40 }}>იტვირთება...</div>
           )}
@@ -265,10 +269,16 @@ export default function ChatScreen({ user, lang }) {
               </div>
             )
           })}
-          <div ref={bottomRef} />
         </div>
       ) : (
-        <DirectMessagesScreen user={user} />
+        <div style={{
+          position:'fixed', left:0, right:0, maxWidth:fixedBarStyle.maxWidth, margin:'0 auto',
+          top: HEADER_H + topH + 2,
+          bottom: NAV_H,
+          overflow:'hidden',
+        }}>
+          <DirectMessagesScreen user={user} />
+        </div>
       )}
 
       {/* ══ FIXED — Input bar, pinned above bottom nav ════════ */}
