@@ -314,3 +314,20 @@ export const getActiveDuel = async (userId) => {
     return data
   } catch { return null }
 }
+
+// ── XP increment (race-condition safe via RPC) ───────────────
+export const addXP = async (userId, amount) => {
+  try {
+    const { data } = await supabase.rpc('increment_xp', {
+      p_user_id: userId,
+      p_amount:  amount
+    })
+    return data ?? 0
+  } catch {
+    // fallback: read-then-write
+    const { data: p } = await supabase.from('profiles').select('xp').eq('id', userId).single()
+    const next = (p?.xp || 0) + amount
+    await supabase.from('profiles').update({ xp: next }).eq('id', userId)
+    return next
+  }
+}
