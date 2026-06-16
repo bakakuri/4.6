@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTheme } from '../lib/ThemeContext.jsx'
 import { LANG } from '../theme.js'
 import { allWords } from '../data/words.js'
-import { getChatMessages, sendChatMessage, recordCorrect, recordAnswer, getTotalUnreadDms } from '../utils/db.js'
+import { getChatMessages, sendChatMessage, recordCorrect, recordAnswer, getTotalUnreadDms, addXP } from '../utils/db.js'
+import { XP_REWARD } from '../utils/gamification.js'
 import DirectMessagesScreen from './DirectMessagesScreen.jsx'
 import { rnd } from '../utils/helpers.js'
 import { supabase } from '../lib/supabase.js'
@@ -119,7 +120,10 @@ export default function ChatScreen({ user, lang }) {
       if (word) {
         recordAnswer(user.id)
         const ok = answer.toLowerCase() === word.t.toLowerCase()
-        if (ok) recordCorrect(user.id)
+        if (ok) {
+          recordCorrect(user.id)
+          addXP(user.id, XP_REWARD.chat)
+        }
         const hint = word.t.slice(0, Math.ceil(word.t.length / 2)) + '...'
         await sendChatMessage({
           userId: null, username: BOT, isBot: true,
