@@ -1,10 +1,9 @@
-
 import { useTheme } from '../lib/ThemeContext.jsx'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { LANG } from '../theme.js'
 import { allWords } from '../data/words.js'
 import { rnd, speakWord } from '../utils/helpers.js'
-import { recordCorrect, recordAnswer, awardXP, getProgress } from '../utils/db.js'
+import { recordCorrect, recordAnswer, addXP, getProgress } from '../utils/db.js'
 import { XP_REWARD } from '../utils/gamification.js'
 
 // ── Shared style helpers ─────────────────────────────────────
@@ -69,7 +68,7 @@ function useMulti(ws, user, lang) {
   const [q,setQ]=useState(null); const [opts,setOpts]=useState([]); const [sel,setSel]=useState(null); const [score,setScore]=useState(0); const [total,setTotal]=useState(0)
   const next=useCallback(()=>{const w=rnd(ws);const wrong=ws.filter(x=>x.id!==w.id).sort(()=>Math.random()-.5).slice(0,3).map(x=>x.t);setQ(w);setOpts([w.t,...wrong].sort(()=>Math.random()-.5));setSel(null)},[ws])
   useEffect(()=>{next()},[])
-  const pick=(opt)=>{if(sel)return;setSel(opt);recordAnswer(user.id);if(opt===q.t){setScore(s=>s+1);recordCorrect(user.id);awardXP(user.id,XP_REWARD.multi)}setTotal(v=>v+1);setTimeout(next,1200)}
+  const pick=(opt)=>{if(sel)return;setSel(opt);recordAnswer(user.id);if(opt===q.t){setScore(s=>s+1);recordCorrect(user.id);addXP(user.id,XP_REWARD.multi)}setTotal(v=>v+1);setTimeout(next,1200)}
   return [q,opts,sel,score,total,next,pick]
 }
 
@@ -81,7 +80,7 @@ function FillBlank({ user, lang, words, onExit }) {
   const ws=words; const [q,setQ]=useState(null); const [inp,setInp]=useState(''); const [res,setRes]=useState(null); const [score,setScore]=useState(0); const [total,setTotal]=useState(0)
   const next=useCallback(()=>{setQ(rnd(ws));setInp('');setRes(null)},[ws])
   useEffect(()=>{next()},[])
-  const check=()=>{if(!inp.trim()||res!==null)return;const ok=inp.trim().toLowerCase()===q.w.toLowerCase();setRes(ok);setTotal(v=>v+1);recordAnswer(user.id);if(ok){setScore(s=>s+1);recordCorrect(user.id);awardXP(user.id,XP_REWARD.fill)}setTimeout(next,1600)}
+  const check=()=>{if(!inp.trim()||res!==null)return;const ok=inp.trim().toLowerCase()===q.w.toLowerCase();setRes(ok);setTotal(v=>v+1);recordAnswer(user.id);if(ok){setScore(s=>s+1);recordCorrect(user.id);addXP(user.id,XP_REWARD.fill)}setTimeout(next,1600)}
   if(!q)return null
   return (
     <div>
@@ -136,7 +135,7 @@ function Scramble({ user, lang, words, onExit }) {
   useEffect(()=>{next()},[])
   const add=idx=>{if(letters[idx].used)return;setLetters(p=>p.map((lt,i)=>i===idx?{...lt,used:true}:lt));setAns(a=>[...a,{l:letters[idx].l,fi:idx}])}
   const rem=()=>{if(!ans.length)return;const last=ans[ans.length-1];setLetters(p=>p.map((lt,i)=>i===last.fi?{...lt,used:false}:lt));setAns(a=>a.slice(0,-1))}
-  const check=()=>{if(!ans.length||res!==null)return;const ok=ans.map(a=>a.l).join('')===q.w.toUpperCase();setRes(ok);setTotal(v=>v+1);recordAnswer(user.id);if(ok){setScore(s=>s+1);recordCorrect(user.id);awardXP(user.id,XP_REWARD.scramble)}setTimeout(next,1500)}
+  const check=()=>{if(!ans.length||res!==null)return;const ok=ans.map(a=>a.l).join('')===q.w.toUpperCase();setRes(ok);setTotal(v=>v+1);recordAnswer(user.id);if(ok){setScore(s=>s+1);recordCorrect(user.id);addXP(user.id,XP_REWARD.scramble)}setTimeout(next,1500)}
   if(!q)return null
   return (
     <div>
@@ -171,7 +170,7 @@ function Listening({ user, lang, words, onExit }) {
   const next=useCallback(()=>{const w=rnd(ws);setQ(w);setInp('');setRes(null)},[ws])
   useEffect(()=>{next()},[])
   useEffect(()=>{if(q)speakWord(q.w,lc.code)},[q])
-  const check=()=>{if(!inp.trim()||res!==null)return;const ok=inp.trim().toLowerCase()===q.w.toLowerCase();setRes(ok);setTotal(v=>v+1);recordAnswer(user.id);if(ok){setScore(s=>s+1);recordCorrect(user.id);awardXP(user.id,XP_REWARD.listen)}setTimeout(next,1600)}
+  const check=()=>{if(!inp.trim()||res!==null)return;const ok=inp.trim().toLowerCase()===q.w.toLowerCase();setRes(ok);setTotal(v=>v+1);recordAnswer(user.id);if(ok){setScore(s=>s+1);recordCorrect(user.id);addXP(user.id,XP_REWARD.listen)}setTimeout(next,1600)}
   if(!q)return null
   return (
     <div>
@@ -216,7 +215,7 @@ function SpeechEx({ user, lang, words, onExit }) {
       const norm=s=>s.replace(/^(der|die|das|ein|eine)\s+/i,'').toLowerCase().trim()
       const ok=norm(said)===norm(q.w)
       setRes(ok); setTotal(v=>v+1); recordAnswer(user.id)
-      if(ok){setScore(s=>s+1);recordCorrect(user.id);awardXP(user.id,XP_REWARD.speech)}
+      if(ok){setScore(s=>s+1);recordCorrect(user.id);addXP(user.id,XP_REWARD.speech)}
     }
     rec.onerror=()=>setListening(false)
     rec.onend=()=>setListening(false)
@@ -308,9 +307,10 @@ function SentenceEx({ user, lang, words, onExit }) {
     const partial=matches/exWords.length>=0.7
     const accepted=ok||partial
     setRes(accepted); setTotal(v=>v+1); recordAnswer(user.id)
-    if(accepted){setScore(s=>s+1);recordCorrect(user.id);awardXP(user.id,XP_REWARD.sentence)}
+    if(accepted){setScore(s=>s+1);recordCorrect(user.id);addXP(user.id,XP_REWARD.sentence)}
   }
 
+  
   if(ws.length===0) return (
     <div>
       <Row C={C} score={0} total={0} onExit={onExit} />
@@ -367,7 +367,7 @@ function GenderEx({ user, words, onExit }) {
 
   const pick=art=>{
     if(sel)return; setSel(art); recordAnswer(user.id)
-    if(art===getGender(q.w)){setScore(s=>s+1);recordCorrect(user.id);awardXP(user.id,XP_REWARD.gender)}
+    if(art===getGender(q.w)){setScore(s=>s+1);recordCorrect(user.id);addXP(user.id,XP_REWARD.gender)}
     setTotal(v=>v+1); setTimeout(next,1400)
   }
 
