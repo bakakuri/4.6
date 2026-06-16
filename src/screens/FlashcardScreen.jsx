@@ -1,10 +1,10 @@
-
 import { useTheme } from '../lib/ThemeContext.jsx'
 import { useState, useEffect, useRef } from 'react'
 import { LANG, LEVEL_COLORS } from '../theme.js'
 import { allWords, getWordLevel } from '../data/words.js'
-import { getProgress, saveProgress, nextCardFromProgress, bumpSession, bumpActivity } from '../utils/db.js'
+import { getProgress, saveProgress, nextCardFromProgress, bumpSession, bumpActivity, addXP } from '../utils/db.js'
 import { speakWord } from '../utils/helpers.js'
+import { XP_REWARD } from '../utils/gamification.js'
 
 export default function FlashcardScreen({ user, lang }) {
   const { C, gls } = useTheme()
@@ -29,10 +29,14 @@ export default function FlashcardScreen({ user, lang }) {
 
   const answer = (mastery) => {
     if (!card || !progress) return
-    // Floating XP on "ადვილი"
-    if (mastery === 100) {
+    // XP based on rating: easy=full, ok=half, hard=quarter, again=none
+    const xpMap = { 100: XP_REWARD.flashcard, 75: Math.round(XP_REWARD.flashcard*0.5),
+                    50: Math.round(XP_REWARD.flashcard*0.25), 25: 0 }
+    const xpEarned = xpMap[mastery] ?? 0
+    if (xpEarned > 0) {
+      addXP(user.id, xpEarned)
       clearTimeout(xpTimer.current)
-      setXpFloat({ x: window.innerWidth/2, y: window.innerHeight/2, pts: 15 })
+      setXpFloat({ x: window.innerWidth/2, y: window.innerHeight/2, pts: xpEarned })
       xpTimer.current = setTimeout(() => setXpFloat(null), 1100)
     }
     // Optimistic update – instant next card, save to DB in background
