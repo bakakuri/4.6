@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { useTheme } from '../lib/ThemeContext.jsx'
 import { LANG } from '../theme.js'
@@ -6,6 +5,7 @@ import { allWords } from '../data/words.js'
 import { getStats, getDailyLearned, getLeaderboard, updateAchievements } from '../utils/db.js'
 import { calcLevel, ACHIEVEMENTS } from '../utils/gamification.js'
 import { speakWord } from '../utils/helpers.js'
+import { supabase } from '../lib/supabase.js'
 
 const getWordOfDay = (lang) => {
   const ws = allWords(lang); if (!ws.length) return null
@@ -40,6 +40,19 @@ export default function HomeScreen({ user, lang, onNav }) {
       if (earned.length) setNewAchs(earned)
     })
   }, [user.id, lang])
+
+  // ── Live XP/streak via Realtime ──────────────────────────────
+  useEffect(() => {
+    const ch = supabase.channel('home-xp')
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'profiles',
+        filter: `id=eq.${user.id}`
+      }, ({ new: p }) => {
+        setSt(prev => prev ? { ...prev, xp: p.xp ?? prev.xp, streak: p.streak ?? prev.streak } : prev)
+      })
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [user.id])
 
   const lc    = LANG[lang]
   const pct   = st ? (st.total ? Math.round((st.learned / st.total) * 100) : 0) : 0
