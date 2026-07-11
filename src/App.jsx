@@ -46,7 +46,34 @@ function Inner() {
   }, [])
 
   const [profile,     setProfile]     = useState(null)
-  const [page,        setPage]        = useState('home')
+  const [page,        setPage]        = useState(() => {
+    // restore page from history on refresh
+    return window.history.state?.page || 'home'
+  })
+
+  // ── History API — back-swipe navigates within app ────────────
+  const navigate = (newPage) => {
+    setPage(newPage)
+    window.history.pushState({ page: newPage }, '', '/')
+  }
+
+  useEffect(() => {
+    // Set initial history entry
+    window.history.replaceState({ page: 'home' }, '', '/')
+
+    const onPop = (e) => {
+      const prev = e.state?.page
+      if (prev) {
+        setPage(prev)
+      } else {
+        // ჩვენ root-ზე ვართ — home-ზე ვრჩებით, საიტს არ ვტოვებთ
+        setPage('home')
+        window.history.pushState({ page: 'home' }, '', '/')
+      }
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [dictCat,     setDictCat]     = useState(null)
   const [showLangSel, setShowLangSel] = useState(false)
@@ -59,7 +86,7 @@ function Inner() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_ev, session) => {
       setSession(session)
       if (session) loadProfile(session.user.id)
-      else { setProfile(null); setPage('home') }
+      else { setProfile(null); setPage('home'); window.history.replaceState({ page:'home' },'','/') }
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -81,7 +108,7 @@ function Inner() {
     await updateProfile(session.user.id, { current_lang: lang })
     setProfile(p => ({ ...p, current_lang: lang }))
     setShowLangSel(false)
-    setPage('home')
+    navigate('home')
     // Now bump session/activity after lang is set
     bumpSession(session.user.id)
     bumpActivity(session.user.id)
@@ -182,7 +209,7 @@ function Inner() {
     return (
       <div style={{ background: C.bg, minHeight:'100vh', maxWidth:480, margin:'0 auto',
                     color: C.t, fontFamily:"'Inter',system-ui,sans-serif", transition:'background .3s' }}>
-        <LearnedWordsScreen user={user} lang={lang} onBack={() => setPage('profile')} />
+        <LearnedWordsScreen user={user} lang={lang} onBack={() => navigate('profile')} />
       </div>
     )
   }
@@ -191,36 +218,36 @@ function Inner() {
     <div style={{ background: C.bg, minHeight:'100vh', maxWidth:480, margin:'0 auto', position:'relative' }}>
       <Header lang={lang} onSidebar={() => setSidebarOpen(o => !o)} />
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)}
-               onNav={setPage} activeCat={dictCat} onCat={setDictCat} />
+               onNav={navigate} activeCat={dictCat} onCat={setDictCat} />
 
       <div style={{ paddingTop:56, paddingBottom:70, minHeight:'100vh', background: C.bg,
                     color: C.t, fontFamily:"'Inter',system-ui,sans-serif",
                     overflowY:'auto', transition:'background .3s, color .3s' }}>
-        {page==='home'       && <HomeScreen       user={user} lang={lang} onNav={setPage} />}
+        {page==='home'       && <HomeScreen       user={user} lang={lang} onNav={navigate} />}
         {page==='flashcards' && <FlashcardScreen  user={user} lang={lang} />}
         {page==='grammar'    && <GrammarScreen    lang={lang} />}
         {page==='dictionary' && <DictionaryScreen lang={lang} activeCat={dictCat} />}
         {page==='exercises'  && <ExercisesScreen  user={user} lang={lang} />}
-        {page==='profile'    && <ProfileScreen    user={user} lang={lang} onNav={setPage} />}
+        {page==='profile'    && <ProfileScreen    user={user} lang={lang} onNav={navigate} />}
         {page==='settings'   && <SettingsScreen   user={user} lang={lang}
                                    onLangChange={() => setShowLangSel(true)}
                                    onLogout={handleLogout}
-                                   onNav={setPage} />}
+                                   onNav={navigate} />}
         {page==='chat'       && <ChatScreen       user={user} lang={lang} />}
         {page==='admin' && user.isAdmin && <AdminScreen lang={lang} user={user} />}
-        {page==='duel'       && <DuelScreen        user={user} lang={lang} onBack={() => setPage('home')} />}
+        {page==='duel'       && <DuelScreen        user={user} lang={lang} onBack={() => navigate('home')} />}
         {page==='friends'    && <FriendsScreen     user={user}
-                                   onNav={setPage}
-                                   onChallenge={(p) => { setPage('duel') }} />}
-        {page==='customWords'&& <CustomWordsScreen user={user} lang={lang} onBack={() => setPage('settings')} />}
+                                   onNav={navigate}
+                                   onChallenge={() => navigate('duel')} />}
+        {page==='customWords'&& <CustomWordsScreen user={user} lang={lang} onBack={() => navigate('settings')} />}
       </div>
 
-      <BottomNav page={page} onNav={(p) => { setPage(p); if (p==='chat') setDmCount(0) }}
+      <BottomNav page={page} onNav={(p) => { navigate(p); if (p==='chat') setDmCount(0) }}
                  isAdmin={user.isAdmin} friendReqCount={friendReqCount} dmCount={dmCount} />
 
       {/* ── Global notification toasts ── */}
       {notifQueue.map((n, idx) => (
-        <div key={n.id} onClick={()=>{ setPage(n.page); dismissNotif(n.id) }}
+        <div key={n.id} onClick={()=>{ navigate(n.page); dismissNotif(n.id) }}
           style={{
             position:'fixed', left:12, right:12, zIndex:9998,
             top: 68 + idx * 72,
