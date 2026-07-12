@@ -2,8 +2,9 @@ import { useTheme } from '../lib/ThemeContext.jsx'
 import { useState, useEffect, useRef } from 'react'
 import { LANG, LEVEL_COLORS } from '../theme.js'
 import { allWords, getWordLevel } from '../data/words.js'
-import { getProgress, saveProgress, nextCardFromProgress, bumpSession, bumpActivity, addXP, getWeakWordIds } from '../utils/db.js'
+import { getProgress, saveProgress, nextCardFromProgress, bumpSession, bumpActivity, addXP, getWeakWordIds, getPracticeQueue, addToPracticeQueue, removeFromPracticeQueue } from '../utils/db.js'
 import { speakWord } from '../utils/helpers.js'
+import { preload } from '../utils/tts.js'
 import { XP_REWARD } from '../utils/gamification.js'
 
 export default function FlashcardScreen({ user, lang }) {
@@ -15,8 +16,10 @@ export default function FlashcardScreen({ user, lang }) {
   const [loading,  setLoading]  = useState(true)
   const [xpFloat,  setXpFloat]  = useState(null) // { x, y, pts }
   const xpTimer = useRef(null)
-  const [weakMode, setWeakMode] = useState(false)
-  const [weakIds,  setWeakIds]  = useState([])
+  const [weakMode,    setWeakMode]    = useState(false)
+  const [weakIds,     setWeakIds]     = useState([])
+  const [practiceIds, setPracticeIds] = useState(new Set())
+  const [pqBusy,      setPqBusy]      = useState(false)
   const lc = LANG[lang]
 
   // Load weak word IDs when weakMode on
@@ -96,9 +99,32 @@ export default function FlashcardScreen({ user, lang }) {
     </div>
   )
 
+  const togglePractice = async (e, wordId) => {
+    e.stopPropagation()
+    setPqBusy(true)
+    if (practiceIds.has(wordId)) {
+      await removeFromPracticeQueue(user.id, lang, wordId)
+      setPracticeIds(prev => { const n = new Set(prev); n.delete(wordId); return n })
+    } else {
+      await addToPracticeQueue(user.id, lang, wordId)
+      setPracticeIds(prev => new Set([...prev, wordId]))
+    }
+    setPqBusy(false)
+  }
+
   const cardLevel = getWordLevel(lang, card.id)
   const mastery   = progress?.[card.id]?.mastery || 0
   const mColor    = mastery >= 75 ? C.g : mastery >= 50 ? C.gold : mastery >= 25 ? C.o : C.ts
+
+  // Auto-play word when card changes
+  useEffect(() => {
+    if (card?.w && lc?.code) {
+      const t = setTimeout(() => speakWord(card.w, lc.code), 200)
+      // Preload example sentence audio too
+      if (card.ex) preload(card.ex, lc.code)
+      return () => clearTimeout(t)
+    }
+  }, [card?.id]) // eslint-disable-line
 
   return (
     <div className="page-enter" style={{ padding: '16px 16px 20px', fontFamily: "'Inter',system-ui,sans-serif" }}>
@@ -149,8 +175,28 @@ export default function FlashcardScreen({ user, lang }) {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ color: C.tm, fontSize: 12 }}>👆 დააჭირე გადასაბრუნებლად</span>
-              <button onClick={e => { e.stopPropagation(); speakWord(card.w, lc.code) }}
-                style={{ background: `linear-gradient(135deg,${C.a},${C.p})`, border: 'none', borderRadius: 10, padding: '8px 14px', color: '#fff', fontSize: 18, cursor: 'pointer', boxShadow: `0 2px 12px ${C.aG}`, fontFamily: 'inherit' }}>🔊</button>
+              <div style={{ display:'flex', gap:6 }}>
+                <button onClick={e => { e.stopPropagation(); speakWord(card.w, lc.code, true) }}
+                  className="tap"
+                  style={{ background: C.card3, border:`1px solid ${C.bdL}`, borderRadius:10,
+                    padding:'7px 10px', color:C.ts, fontSize:11, cursor:'pointer',
+                    fontFamily:'inherit', fontWeight:600 }}>🐢 ნელა</button>
+                <button onClick={e => { e.stopPropagation(); speakWord(card.w, lc.code) }}
+                  className="tap"
+                  style={{ background:`linear-gradient(135deg,${C.a},${C.p})`, border:'none',
+                    borderRadius:10, padding:'8px 14px', color:'#fff', fontSize:18,
+                    cursor:'pointer', boxShadow:`0 2px 12px ${C.aG}`, fontFamily:'inherit' }}>🔊</button>
+                <button onClick={e => togglePractice(e, card.id)}
+                  disabled={pqBusy}
+                  title={practiceIds.has(card.id) ? 'სამეცადინოდან ამოღება' : 'სამეცადინოში დამატება'}
+                  className="tap"
+                  style={{ background: practiceIds.has(card.id) ? `${C.o}33` : C.card3,
+                    border:`1px solid ${practiceIds.has(card.id) ? C.o+'88' : C.bdL}`,
+                    borderRadius:10, padding:'8px 11px', color: practiceIds.has(card.id) ? C.o : C.ts,
+                    fontSize:18, cursor:'pointer', opacity: pqBusy ? 0.5 : 1 }}>
+                  {practiceIds.has(card.id) ? '📌' : '📚'}
+                </button>
+              </div>
             </div>
           </div>
 
