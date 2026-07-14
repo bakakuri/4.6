@@ -126,7 +126,7 @@ function Inner() {
 
     // Load initial unread DM count
     supabase.from('direct_messages').select('id', { count:'exact', head:true })
-      .eq('recipient_id', uid).eq('read', false)
+      .eq('receiver_id', uid).eq('read', false)
       .then(({ count }) => setDmCount(count || 0))
 
     const ch = supabase.channel('app-notifs-'+uid)
