@@ -112,6 +112,17 @@ export default function FlashcardScreen({ user, lang }) {
     setPqBusy(false)
   }
 
+  // Guard: card may be null if no words left
+  if (!card) return (
+    <div style={{ padding:'40px 20px', textAlign:'center',
+      fontFamily:"'Inter',system-ui,sans-serif" }}>
+      <div style={{ fontSize:52, marginBottom:16 }}>🎉</div>
+      <div style={{ color:C.t, fontWeight:700, fontSize:18 }}>
+        ყველა სიტყვა ნასწავლია!
+      </div>
+    </div>
+  )
+
   const cardLevel = getWordLevel(lang, card.id)
   const mastery   = progress?.[card.id]?.mastery || 0
   const mColor    = mastery >= 75 ? C.g : mastery >= 50 ? C.gold : mastery >= 25 ? C.o : C.ts
@@ -255,4 +266,4 @@ export default function FlashcardScreen({ user, lang }) {
       )}
     </div>
   )
-}
+              }
