@@ -1,409 +1,184 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LANG, LEVELS } from '../theme.js'
+import { LANG } from '../theme.js'
 import { useTheme } from '../lib/ThemeContext.jsx'
+import { supabase } from '../lib/supabase.js'
 import GR from '../data/grammar.js'
 
-const STORAGE_PREFIX = 'lm_grammar'
-
-function storageKey(lang, suffix) {
-  return `${STORAGE_PREFIX}:${lang}:${suffix}`
-}
-
-function safeRead(key, fallback) {
-  try {
-    if (typeof window === 'undefined') return fallback
-    const raw = window.localStorage.getItem(key)
-    if (!raw) return fallback
-    return JSON.parse(raw)
-  } catch {
-    return fallback
-  }
-}
-
-function safeWrite(key, value) {
-  try {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // localStorage can fail in private modes or locked-down contexts.
-  }
+const STATUS = {
+  new: { label: 'ახალი', icon: '⚪' },
+  learning: { label: 'ვწავლობ', icon: '🔵' },
+  review: { label: 'გამეორება', icon: '🟡' },
+  mastered: { label: 'ათვისებული', icon: '🟢' },
 }
 
 function normalize(text = '') {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+  return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
-function topicId(lang, cat, title) {
-  return `${lang}::${cat}::${title}`
-}
-
-function renderInline(line, C) {
-  return line.split(/(\*\*.*?\*\*)/g).map((part, idx) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={idx} style={{ color: C.t }}>{part.slice(2, -2)}</strong>
-    }
-    return part
-  })
-}
-
-function extractHighlights(body = '') {
-  return body
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => {
-      if (!line) return false
-      return line.startsWith('•') || line.startsWith('⚠️') || line.startsWith('✅') || /^\*\*.*\*\*$/.test(line)
-    })
-    .slice(0, 8)
-}
-
-function renderBody(body, C) {
-  return body.split('\n').map((line, i) => {
-    const trimmed = line.trim()
-
-    if (!trimmed) return <div key={i} style={{ height: 10 }} />
-
-    if (/^\*\*.*\*\*$/.test(trimmed)) {
-      return (
-        <div key={i} style={{ color: C.t, fontWeight: 800, fontSize: 15, marginTop: 14, marginBottom: 4 }}>
-          {trimmed.replace(/\*\*/g, '')}
-        </div>
-      )
-    }
-
-    if (trimmed.startsWith('•')) {
-      return (
-        <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 6 }}>
-          <span style={{ color: C.a, fontWeight: 900, lineHeight: 1.7 }}>•</span>
-          <div style={{ color: C.ts, fontSize: 14, lineHeight: 1.7, flex: 1 }}>
-            {renderInline(trimmed.replace(/^•\s*/, ''), C)}
-          </div>
-        </div>
-      )
-    }
-
-    if (trimmed.startsWith('⚠️') || trimmed.startsWith('✅') || trimmed.startsWith('💡')) {
-      const tone = trimmed.startsWith('⚠️') ? C.o : trimmed.startsWith('✅') ? C.g : C.a
-      return (
-        <div
-          key={i}
-          style={{
-            borderLeft: `3px solid ${tone}`,
-            background: C.card3,
-            borderRadius: 10,
-            padding: '10px 12px',
-            margin: '8px 0 6px',
-            color: C.ts,
-            fontSize: 14,
-            lineHeight: 1.7,
-          }}
-        >
-          {renderInline(trimmed, C)}
-        </div>
-      )
-    }
-
-    return (
-      <div key={i} style={{ color: C.ts, fontSize: 14, lineHeight: 1.75, marginBottom: 4 }}>
-        {renderInline(trimmed, C)}
-      </div>
-    )
-  })
+function keyOf(lang, category, topic) {
+  return `${lang}::${category}::${topic}`
 }
 
 function topicSummary(topic) {
-  const raw = topic?.ex?.[0] || topic?.body || ''
-  return raw
+  const source = topic?.ex?.[0] || topic?.body || ''
+  return source
     .split('\n')
     .map(line => line.replace(/^\*\*|\*\*$/g, '').replace(/^•\s*/, '').trim())
     .find(Boolean)
-    ?.slice(0, 120) || ''
+    ?.slice(0, 150) || 'გრამატიკული წესები, ახსნა და მაგალითები.'
 }
 
-function TopicView({ lang, cat, topic, bookmarked, onBack, onToggleBookmark, onOpenTopic, relatedTopics, seenCount }) {
+function renderInline(text, C) {
+  return text.split(/(\*\*.*?\*\*)/g).map((part, index) => (
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={index} style={{ color: C.t }}>{part.slice(2, -2)}</strong>
+      : part
+  ))
+}
+
+function renderBody(body = '', C) {
+  return body.split('\n').map((line, index) => {
+    const text = line.trim()
+    if (!text) return <div key={index} style={{ height: 8 }} />
+
+    if (/^\*\*.*\*\*$/.test(text)) {
+      return <h3 key={index} style={{ color: C.t, fontSize: 16, margin: '16px 0 6px' }}>{text.replace(/\*\*/g, '')}</h3>
+    }
+
+    if (/^(⚠️|✅|💡)/.test(text)) {
+      const tone = text.startsWith('⚠️') ? C.o : text.startsWith('✅') ? C.g : C.a
+      return (
+        <div key={index} style={{ borderLeft: `3px solid ${tone}`, background: C.card3, borderRadius: 10, padding: '10px 12px', margin: '8px 0', color: C.ts, lineHeight: 1.7, fontSize: 14 }}>
+          {renderInline(text, C)}
+        </div>
+      )
+    }
+
+    if (text.startsWith('•')) {
+      return (
+        <div key={index} style={{ display: 'flex', gap: 10, color: C.ts, fontSize: 14, lineHeight: 1.7, marginBottom: 5 }}>
+          <span style={{ color: C.a }}>•</span>
+          <span>{renderInline(text.replace(/^•\s*/, ''), C)}</span>
+        </div>
+      )
+    }
+
+    return <p key={index} style={{ color: C.ts, fontSize: 14, lineHeight: 1.8, margin: '5px 0' }}>{renderInline(text, C)}</p>
+  })
+}
+
+function StatCard({ icon, label, value, C, gls }) {
+  return (
+    <div style={gls({ padding: 14 })}>
+      <div style={{ color: C.ts, fontSize: 12, marginBottom: 7 }}>{icon} {label}</div>
+      <div style={{ color: C.t, fontWeight: 900, fontSize: 23 }}>{value}</div>
+    </div>
+  )
+}
+
+function TopicPage({ lang, category, topic, progress, bookmarked, note, onBack, onToggleBookmark, onSaveNote, onUpdateProgress, onOpenTopic, related }) {
   const { C, gls } = useTheme()
-  const highlights = extractHighlights(topic.body)
+  const [noteDraft, setNoteDraft] = useState(note || '')
+  const [noteSaving, setNoteSaving] = useState(false)
+
+  useEffect(() => setNoteDraft(note || ''), [note])
+
+  const currentStatus = progress?.status || 'new'
+  const mastery = progress?.mastery || 0
+
+  const saveNote = async () => {
+    setNoteSaving(true)
+    await onSaveNote(noteDraft)
+    setNoteSaving(false)
+  }
 
   return (
     <div className="page-enter" style={{ padding: 16, fontFamily: "'Inter',system-ui,sans-serif" }}>
-      <button
-        onClick={onBack}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          background: C.card3,
-          border: `1px solid ${C.bdL}`,
-          borderRadius: 12,
-          padding: '8px 14px',
-          color: C.ts,
-          fontSize: 14,
-          cursor: 'pointer',
-          marginBottom: 16,
-          fontFamily: 'inherit',
-        }}
-      >
+      <button onClick={onBack} style={{ border: `1px solid ${C.bdL}`, background: C.card3, color: C.ts, borderRadius: 12, padding: '9px 14px', cursor: 'pointer', fontFamily: 'inherit', marginBottom: 16 }}>
         ← უკან
       </button>
 
       <div style={{ ...gls({ padding: 18, marginBottom: 12 }), background: `linear-gradient(135deg,${C.card2},${C.card3})` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ color: C.ts, fontSize: 12, marginBottom: 6 }}>
-              {LANG[lang]?.flag} {cat.cat} · თემა
-            </div>
-            <div style={{ color: C.t, fontWeight: 900, fontSize: 22, lineHeight: 1.2 }}>{topic.title}</div>
-            <div style={{ color: C.ts, fontSize: 13, marginTop: 8, lineHeight: 1.6 }}>
-              {topicSummary(topic) || 'კომპაქტური ახსნა, მაგალითები და დასამახსოვრებელი წესები ერთ გვერდზე.'}
-            </div>
+            <div style={{ color: C.ts, fontSize: 12, marginBottom: 6 }}>{LANG[lang]?.flag} {category.cat}</div>
+            <h1 style={{ color: C.t, fontSize: 24, lineHeight: 1.2, margin: 0 }}>{topic.title}</h1>
+            <div style={{ color: C.ts, fontSize: 13, lineHeight: 1.7, marginTop: 8 }}>{topicSummary(topic)}</div>
           </div>
-          <button
-            onClick={onToggleBookmark}
-            style={{
-              minWidth: 44,
-              minHeight: 44,
-              borderRadius: 14,
-              border: `1px solid ${bookmarked ? C.gold : C.bdL}`,
-              background: bookmarked ? `${C.gold}18` : C.card,
-              color: bookmarked ? C.gold : C.ts,
-              cursor: 'pointer',
-              fontSize: 18,
-            }}
-            aria-label="bookmark topic"
-            title="რჩეულებში დამატება"
-          >
+          <button onClick={onToggleBookmark} title="რჩეულებში დამატება" style={{ minWidth: 46, minHeight: 46, borderRadius: 14, border: `1px solid ${bookmarked ? C.gold : C.bdL}`, background: bookmarked ? `${C.gold}18` : C.card, color: bookmarked ? C.gold : C.ts, cursor: 'pointer', fontSize: 21 }}>
             {bookmarked ? '★' : '☆'}
           </button>
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-          <span style={{ padding: '6px 10px', borderRadius: 999, background: C.bg, color: C.ts, fontSize: 12, border: `1px solid ${C.bdL}` }}>
-            📘 ახსნა
-          </span>
-          <span style={{ padding: '6px 10px', borderRadius: 999, background: C.bg, color: C.ts, fontSize: 12, border: `1px solid ${C.bdL}` }}>
-            🧠 {seenCount > 0 ? `${seenCount} ნანახი თემა` : 'პირველი ნაბიჯი'}
-          </span>
-          <span style={{ padding: '6px 10px', borderRadius: 999, background: C.bg, color: C.ts, fontSize: 12, border: `1px solid ${C.bdL}` }}>
-            ⭐ {bookmarked ? 'რჩეულებშია' : 'შეინახე'}
-          </span>
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: C.ts, fontSize: 12, marginBottom: 6 }}>
+            <span>Mastery</span><strong style={{ color: C.a }}>{mastery}%</strong>
+          </div>
+          <div style={{ height: 8, borderRadius: 999, background: C.card, overflow: 'hidden' }}>
+            <div style={{ width: `${mastery}%`, height: '100%', background: `linear-gradient(90deg,${C.a},${C.g})` }} />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+          {Object.entries(STATUS).map(([key, item]) => (
+            <button key={key} onClick={() => onUpdateProgress({ status: key })} style={{ padding: '7px 10px', borderRadius: 999, border: `1px solid ${currentStatus === key ? C.a : C.bdL}`, background: currentStatus === key ? `${C.a}18` : C.card, color: currentStatus === key ? C.a : C.ts, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>
+              {item.icon} {item.label}
+            </button>
+          ))}
         </div>
       </div>
 
       <div style={{ display: 'grid', gap: 12 }}>
-        <div style={{ ...gls({ padding: 18 }) }}>
-          <div style={{ color: C.t, fontWeight: 800, fontSize: 16, marginBottom: 12 }}>თემის ახსნა</div>
+        <section style={gls({ padding: 18 })}>
+          <h2 style={{ color: C.t, fontSize: 17, margin: '0 0 12px' }}>📘 სრული ახსნა</h2>
           {renderBody(topic.body, C)}
-        </div>
+        </section>
 
         {topic.ex?.length > 0 && (
-          <div style={{ ...gls({ padding: 18 }) }}>
-            <div style={{ color: C.a, fontWeight: 800, fontSize: 15, marginBottom: 12 }}>📌 მაგალითები</div>
+          <section style={gls({ padding: 18 })}>
+            <h2 style={{ color: C.t, fontSize: 17, margin: '0 0 12px' }}>📌 მაგალითები</h2>
             <div style={{ display: 'grid', gap: 8 }}>
-              {topic.ex.map((ex, i) => (
-                <div
-                  key={i}
-                  style={{
-                    background: C.card3,
-                    borderRadius: 12,
-                    padding: '11px 14px',
-                    borderLeft: `3px solid ${C.a}`,
-                    color: C.t,
-                    fontSize: 14,
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {ex}
+              {topic.ex.map((example, index) => (
+                <div key={index} style={{ borderLeft: `3px solid ${C.a}`, background: C.card3, borderRadius: 10, padding: '11px 14px', color: C.t, fontSize: 14, lineHeight: 1.7 }}>
+                  {example}
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
-        {highlights.length > 0 && (
-          <div style={{ ...gls({ padding: 18 }) }}>
-            <div style={{ color: C.t, fontWeight: 800, fontSize: 15, marginBottom: 12 }}>💡 დასამახსოვრებელი წერტილები</div>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {highlights.map((line, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex',
-                    gap: 10,
-                    alignItems: 'flex-start',
-                    background: C.card3,
-                    borderRadius: 12,
-                    padding: '10px 12px',
-                    color: C.ts,
-                    fontSize: 13,
-                    lineHeight: 1.7,
-                  }}
-                >
-                  <span style={{ color: C.g, fontWeight: 900 }}>▸</span>
-                  <div>{renderInline(line.replace(/^•\s*/, ''), C)}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <section style={gls({ padding: 18 })}>
+          <h2 style={{ color: C.t, fontSize: 17, margin: '0 0 12px' }}>🧠 ჩემი ჩანაწერი</h2>
+          <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} placeholder="ჩაწერე შენი წესი, რთული მაგალითი ან რაც უნდა დაიმახსოვრო..." rows={5} style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', borderRadius: 12, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, padding: 12, fontFamily: 'inherit', fontSize: 14, outline: 'none' }} />
+          <button onClick={saveNote} disabled={noteSaving} style={{ marginTop: 10, border: 'none', borderRadius: 11, padding: '10px 14px', background: C.a, color: '#fff', cursor: noteSaving ? 'wait' : 'pointer', fontWeight: 800, fontFamily: 'inherit' }}>
+            {noteSaving ? 'ინახება...' : 'ჩანაწერის შენახვა'}
+          </button>
+        </section>
 
-        <div style={{ ...gls({ padding: 18 }) }}>
-          <div style={{ color: C.t, fontWeight: 800, fontSize: 15, marginBottom: 12 }}>🎯 როგორ გამოიყენო ეს თემა</div>
+        <section style={gls({ padding: 18 })}>
+          <h2 style={{ color: C.t, fontSize: 17, margin: '0 0 12px' }}>🎯 სწავლის სტატუსი</h2>
           <div style={{ display: 'grid', gap: 8 }}>
-            {[
-              'წაიკითხე ახსნა ერთხელ ბოლომდე.',
-              'გაიმეორე მაგალითები ხმამაღლა.',
-              'შემდეგ მონიშნე რთული ნაწილი და ისევ დაბრუნდი.',
-            ].map((item, idx) => (
-              <div key={idx} style={{ color: C.ts, fontSize: 14, lineHeight: 1.7 }}>
-                {idx + 1}. {item}
-              </div>
+            {[25, 50, 75, 100].map(value => (
+              <button key={value} onClick={() => onUpdateProgress({ mastery: value, status: value === 100 ? 'mastered' : value >= 50 ? 'review' : 'learning' })} style={{ textAlign: 'left', padding: 11, borderRadius: 11, border: `1px solid ${mastery === value ? C.a : C.bdL}`, background: mastery === value ? `${C.a}18` : C.card3, color: C.ts, cursor: 'pointer', fontFamily: 'inherit' }}>
+                {value === 25 ? '📖 გავეცანი თემას' : value === 50 ? '🧠 ვვარჯიშობ' : value === 75 ? '🎯 კარგად ვიცი' : '🏆 სრულად ავითვისე'} · {value}%
+              </button>
             ))}
           </div>
-        </div>
+        </section>
 
-        {relatedTopics.length > 0 && (
-          <div style={{ ...gls({ padding: 18 }) }}>
-            <div style={{ color: C.t, fontWeight: 800, fontSize: 15, marginBottom: 12 }}>🔁 დაკავშირებული თემები</div>
-            <div style={{ display: 'grid', gap: 10 }}>
-              {relatedTopics.map((t) => (
-                <button
-                  key={t.title}
-                  onClick={() => onOpenTopic(t)}
-                  style={{
-                    width: '100%',
-                    textAlign: 'left',
-                    padding: 14,
-                    background: C.card2,
-                    border: `1px solid ${C.bdL}`,
-                    borderRadius: 14,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  <div style={{ color: C.t, fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{t.title}</div>
-                  <div style={{ color: C.ts, fontSize: 12, lineHeight: 1.6 }}>{topicSummary(t)}</div>
-                  <div style={{ color: C.a, fontSize: 12, marginTop: 6 }}>→ გახსნა</div>
+        {related.length > 0 && (
+          <section style={gls({ padding: 18 })}>
+            <h2 style={{ color: C.t, fontSize: 17, margin: '0 0 12px' }}>🔁 დაკავშირებული თემები</h2>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {related.map(item => (
+                <button key={item.title} onClick={() => onOpenTopic(item)} style={{ textAlign: 'left', border: `1px solid ${C.bdL}`, background: C.card2, borderRadius: 12, padding: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  <div style={{ color: C.t, fontWeight: 800 }}>{item.title}</div>
+                  <div style={{ color: C.ts, fontSize: 12, marginTop: 4 }}>{topicSummary(item)}</div>
                 </button>
               ))}
             </div>
-          </div>
+          </section>
         )}
-      </div>
-    </div>
-  )
-}
-
-function CategoryView({ catObj, lang, onBack, onTopic, onToggleBookmark, bookmarks, seen }) {
-  const { C, gls } = useTheme()
-  const catId = catObj.cat
-  const seenCount = catObj.topics.filter(t => seen.has(topicId(lang, catId, t.title))).length
-  const bookmarkCount = catObj.topics.filter(t => bookmarks.has(topicId(lang, catId, t.title))).length
-  const progress = catObj.topics.length ? Math.round((seenCount / catObj.topics.length) * 100) : 0
-
-  return (
-    <div style={{ padding: 16, fontFamily: "'Inter',system-ui,sans-serif" }}>
-      <button
-        onClick={onBack}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          background: C.card3,
-          border: `1px solid ${C.bdL}`,
-          borderRadius: 12,
-          padding: '8px 14px',
-          color: C.ts,
-          fontSize: 14,
-          cursor: 'pointer',
-          marginBottom: 16,
-          fontFamily: 'inherit',
-        }}
-      >
-        ← ყველა კატეგორია
-      </button>
-
-      <div style={{ ...gls({ padding: 18, marginBottom: 12 }), background: `linear-gradient(135deg,${C.card2},${C.card3})` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
-          <span style={{ fontSize: 34 }}>{catObj.icon}</span>
-          <div>
-            <div style={{ color: C.t, fontWeight: 900, fontSize: 22 }}>{catObj.cat}</div>
-            <div style={{ color: C.ts, fontSize: 13, marginTop: 3 }}>
-              {catObj.topics.length} თემა · {seenCount} ნანახი · {bookmarkCount} ფავორიტი
-            </div>
-          </div>
-        </div>
-
-        <div style={{ background: C.card3, borderRadius: 999, height: 8, overflow: 'hidden' }}>
-          <div style={{ width: `${progress}%`, height: '100%', background: `linear-gradient(90deg,${C.a},${C.p})` }} />
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gap: 10 }}>
-        {catObj.topics.map((t) => {
-          const id = topicId(lang, catObj.cat, t.title)
-          const saved = bookmarks.has(id)
-          return (
-            <div
-              key={t.title}
-              style={{
-                padding: 14,
-                background: C.card,
-                border: `1px solid ${C.bdL}`,
-                borderRadius: 16,
-                boxShadow: `0 8px 22px ${C.bg1 || 'rgba(0,0,0,0.08)'}`,
-              }}
-            >
-              <button
-                onClick={() => onTopic(t)}
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  background: 'transparent',
-                  border: 'none',
-                  padding: 0,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: C.t, fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{t.title}</div>
-                    <div style={{ color: C.ts, fontSize: 12, lineHeight: 1.6 }}>{topicSummary(t)}</div>
-                  </div>
-                  <span style={{ color: C.a, fontSize: 20, lineHeight: 1 }}>›</span>
-                </div>
-              </button>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 12 }}>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ padding: '5px 9px', borderRadius: 999, background: C.card3, color: C.ts, fontSize: 11, border: `1px solid ${C.bdL}` }}>
-                    {saved ? '★ saved' : '☆ save'}
-                  </span>
-                  <span style={{ padding: '5px 9px', borderRadius: 999, background: C.card3, color: C.ts, fontSize: 11, border: `1px solid ${C.bdL}` }}>
-                    {t.ex?.length || 0} examples
-                  </span>
-                </div>
-                <button
-                  onClick={() => onToggleBookmark(t)}
-                  style={{
-                    border: `1px solid ${saved ? C.gold : C.bdL}`,
-                    background: saved ? `${C.gold}18` : C.card2,
-                    color: saved ? C.gold : C.ts,
-                    borderRadius: 12,
-                    padding: '7px 10px',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {saved ? '★' : '☆'}
-                </button>
-              </div>
-            </div>
-          )
-        })}
       </div>
     </div>
   )
@@ -411,338 +186,243 @@ function CategoryView({ catObj, lang, onBack, onTopic, onToggleBookmark, bookmar
 
 export default function GrammarScreen({ lang }) {
   const { C, gls } = useTheme()
-  const cats = GR[lang] || GR.english || GR.german || []
-
-  const [selectedCat, setSelectedCat] = useState(null)
-  const [selectedTopic, setSelectedTopic] = useState(null)
+  const categories = GR[lang] || GR.english || []
+  const [userId, setUserId] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [query, setQuery] = useState('')
-  const [mode, setMode] = useState('all')
-  const [bookmarks, setBookmarks] = useState([])
-  const [seen, setSeen] = useState([])
-  const [lastTopicId, setLastTopicId] = useState(null)
-  const [mounted, setMounted] = useState(false)
+  const [filter, setFilter] = useState('all')
+  const [selectedCategory, setSelectedCategory] = useState(null)
+  const [selectedTopic, setSelectedTopic] = useState(null)
+  const [progress, setProgress] = useState({})
+  const [bookmarks, setBookmarks] = useState(new Set())
+  const [notes, setNotes] = useState({})
 
   useEffect(() => {
-    setSelectedCat(null)
-    setSelectedTopic(null)
-    setQuery('')
-    setMode('all')
+    let active = true
 
-    const b = safeRead(storageKey(lang, 'bookmarks'), [])
-    const s = safeRead(storageKey(lang, 'seen'), [])
-    const last = safeRead(storageKey(lang, 'last'), null)
+    async function load() {
+      setLoading(true)
+      setError('')
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (!active) return
+      if (authError) {
+        setError(authError.message)
+        setLoading(false)
+        return
+      }
+      if (!user) {
+        setUserId(null)
+        setLoading(false)
+        return
+      }
 
-    setBookmarks(Array.isArray(b) ? b : [])
-    setSeen(Array.isArray(s) ? s : [])
-    setLastTopicId(typeof last === 'string' ? last : null)
-    setMounted(true)
+      setUserId(user.id)
+      const [progressRes, bookmarksRes, notesRes] = await Promise.all([
+        supabase.from('grammar_progress').select('*').eq('user_id', user.id).eq('lang', lang),
+        supabase.from('grammar_bookmarks').select('category,topic').eq('user_id', user.id).eq('lang', lang),
+        supabase.from('grammar_notes').select('category,topic,note').eq('user_id', user.id).eq('lang', lang),
+      ])
+
+      if (!active) return
+      const firstError = progressRes.error || bookmarksRes.error || notesRes.error
+      if (firstError) setError(firstError.message)
+
+      const progressMap = {}
+      ;(progressRes.data || []).forEach(row => {
+        progressMap[keyOf(lang, row.category, row.topic)] = row
+      })
+      const bookmarkSet = new Set((bookmarksRes.data || []).map(row => keyOf(lang, row.category, row.topic)))
+      const notesMap = {}
+      ;(notesRes.data || []).forEach(row => {
+        notesMap[keyOf(lang, row.category, row.topic)] = row.note
+      })
+
+      setProgress(progressMap)
+      setBookmarks(bookmarkSet)
+      setNotes(notesMap)
+      setLoading(false)
+    }
+
+    load()
+    return () => { active = false }
   }, [lang])
 
-  useEffect(() => {
-    if (!mounted) return
-    safeWrite(storageKey(lang, 'bookmarks'), bookmarks)
-  }, [bookmarks, lang, mounted])
+  const allTopics = useMemo(() => categories.flatMap(category => (category.topics || []).map(topic => ({ category, topic }))), [categories])
+  const totalTopics = allTopics.length
+  const progressRows = Object.values(progress)
+  const seenCount = progressRows.filter(row => (row.times_viewed || 0) > 0).length
+  const masteredCount = progressRows.filter(row => row.status === 'mastered' || row.mastery >= 100).length
+  const averageMastery = totalTopics ? Math.round(progressRows.reduce((sum, row) => sum + (row.mastery || 0), 0) / totalTopics) : 0
 
-  useEffect(() => {
-    if (!mounted) return
-    safeWrite(storageKey(lang, 'seen'), seen)
-  }, [seen, lang, mounted])
-
-  useEffect(() => {
-    if (!mounted) return
-    safeWrite(storageKey(lang, 'last'), lastTopicId)
-  }, [lastTopicId, lang, mounted])
-
-  const bookmarkSet = useMemo(() => new Set(bookmarks), [bookmarks])
-  const seenSet = useMemo(() => new Set(seen), [seen])
-
-  const totalTopics = useMemo(() => cats.reduce((sum, cat) => sum + (cat.topics?.length || 0), 0), [cats])
-  const visibleCats = useMemo(() => {
+  const visibleCategories = useMemo(() => {
     const q = normalize(query.trim())
-    return cats
-      .map(cat => {
-        const topics = (cat.topics || []).filter(topic => {
-          const id = topicId(lang, cat.cat, topic.title)
-          const haystack = normalize([cat.cat, topic.title, topic.body, ...(topic.ex || [])].join(' '))
-          const matchQuery = !q || haystack.includes(q)
-          const matchMode =
-            mode === 'all' ||
-            (mode === 'bookmarks' && bookmarkSet.has(id)) ||
-            (mode === 'seen' && seenSet.has(id))
-          return matchQuery && matchMode
-        })
-        return { ...cat, topics }
-      })
-      .filter(cat => cat.topics.length > 0)
-  }, [cats, lang, query, mode, bookmarkSet, seenSet])
+    return categories.map(category => ({
+      ...category,
+      topics: (category.topics || []).filter(topic => {
+        const id = keyOf(lang, category.cat, topic.title)
+        const haystack = normalize([category.cat, topic.title, topic.body, ...(topic.ex || [])].join(' '))
+        const matchesQuery = !q || haystack.includes(q)
+        const row = progress[id]
+        const matchesFilter = filter === 'all' || (filter === 'bookmarks' && bookmarks.has(id)) || (filter === 'mastered' && (row?.mastery || 0) >= 100) || (filter === 'learning' && row && row.status !== 'new')
+        return matchesQuery && matchesFilter
+      }),
+    })).filter(category => category.topics.length > 0)
+  }, [categories, lang, query, filter, progress, bookmarks])
 
-  const bookmarkedTopics = useMemo(() => bookmarks.length, [bookmarks])
-  const seenTopics = useMemo(() => seen.length, [seen])
-  const progressPct = totalTopics ? Math.round((seenTopics / totalTopics) * 100) : 0
-  const currentLang = LANG[lang] || LANG.english
-
-  const lastTopic = useMemo(() => {
-    if (!lastTopicId) return null
-    for (const cat of cats) {
-      for (const topic of cat.topics || []) {
-        if (topicId(lang, cat.cat, topic.title) === lastTopicId) {
-          return { cat, topic }
-        }
-      }
+  const updateProgress = async (category, topic, patch) => {
+    if (!userId) return
+    const id = keyOf(lang, category.cat, topic.title)
+    const previous = progress[id] || {}
+    const row = {
+      user_id: userId,
+      lang,
+      category: category.cat,
+      topic: topic.title,
+      status: patch.status || previous.status || 'learning',
+      mastery: patch.mastery ?? previous.mastery ?? 0,
+      times_viewed: (previous.times_viewed || 0) + (patch.incrementView ? 1 : 0),
+      correct_count: previous.correct_count || 0,
+      wrong_count: previous.wrong_count || 0,
+      last_seen_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }
-    return null
-  }, [cats, lang, lastTopicId])
+    setProgress(prev => ({ ...prev, [id]: row }))
+    const { error: saveError } = await supabase.from('grammar_progress').upsert(row, { onConflict: 'user_id,lang,category,topic' })
+    if (saveError) setError(saveError.message)
+  }
 
-  const openTopic = (cat, topic) => {
-    setSelectedCat(cat)
+  const openTopic = async (category, topic) => {
+    setSelectedCategory(category)
     setSelectedTopic(topic)
-    const id = topicId(lang, cat.cat, topic.title)
-    if (!seenSet.has(id)) {
-      setSeen(prev => [id, ...prev].slice(0, 120))
-    }
-    setLastTopicId(id)
+    await updateProgress(category, topic, { incrementView: true })
   }
 
-  const toggleBookmark = (cat, topic) => {
-    const id = topicId(lang, cat.cat, topic.title)
-    setBookmarks(prev => prev.includes(id) ? prev.filter(x => x !== id) : [id, ...prev])
+  const toggleBookmark = async (category, topic) => {
+    if (!userId) return
+    const id = keyOf(lang, category.cat, topic.title)
+    const exists = bookmarks.has(id)
+    setBookmarks(prev => {
+      const next = new Set(prev)
+      exists ? next.delete(id) : next.add(id)
+      return next
+    })
+
+    const result = exists
+      ? await supabase.from('grammar_bookmarks').delete().match({ user_id: userId, lang, category: category.cat, topic: topic.title })
+      : await supabase.from('grammar_bookmarks').insert({ user_id: userId, lang, category: category.cat, topic: topic.title })
+    if (result.error) setError(result.error.message)
   }
 
-  const relatedTopics = useMemo(() => {
-    if (!selectedCat || !selectedTopic) return []
-    return (selectedCat.topics || [])
-      .filter(t => t.title !== selectedTopic.title)
-      .slice(0, 4)
-  }, [selectedCat, selectedTopic])
+  const saveNote = async (category, topic, note) => {
+    if (!userId) return
+    const id = keyOf(lang, category.cat, topic.title)
+    const clean = note.trim()
+    setNotes(prev => ({ ...prev, [id]: clean }))
 
-  if (!cats.length) {
+    const result = clean
+      ? await supabase.from('grammar_notes').upsert({ user_id: userId, lang, category: category.cat, topic: topic.title, note: clean, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lang,category,topic' })
+      : await supabase.from('grammar_notes').delete().match({ user_id: userId, lang, category: category.cat, topic: topic.title })
+    if (result.error) setError(result.error.message)
+  }
+
+  if (loading) return <div style={{ padding: 20, color: C.ts }}>გრამატიკის მონაცემები იტვირთება...</div>
+
+  if (!userId) {
+    return <div style={{ padding: 20, color: C.ts, lineHeight: 1.8 }}>🔐 გრამატიკის პროგრესის, ფავორიტებისა და ჩანაწერების შესანახად ავტორიზაცია საჭიროა.</div>
+  }
+
+  if (selectedCategory && selectedTopic) {
+    const id = keyOf(lang, selectedCategory.cat, selectedTopic.title)
+    const related = (selectedCategory.topics || []).filter(item => item.title !== selectedTopic.title).slice(0, 5)
     return (
-      <div style={{ padding: 16, color: C.ts, fontFamily: "'Inter',system-ui,sans-serif" }}>
-        გრამატიკის კონტენტი ჯერ არ მოიძებნა.
-      </div>
-    )
-  }
-
-  if (selectedCat && selectedTopic) {
-    const topicIdValue = topicId(lang, selectedCat.cat, selectedTopic.title)
-    return (
-      <TopicView
+      <TopicPage
         lang={lang}
-        cat={selectedCat}
+        category={selectedCategory}
         topic={selectedTopic}
-        bookmarked={bookmarkSet.has(topicIdValue)}
+        progress={progress[id]}
+        bookmarked={bookmarks.has(id)}
+        note={notes[id] || ''}
         onBack={() => setSelectedTopic(null)}
-        onToggleBookmark={() => toggleBookmark(selectedCat, selectedTopic)}
-        onOpenTopic={(topic) => openTopic(selectedCat, topic)}
-        relatedTopics={relatedTopics}
-        seenCount={seenTopics}
+        onToggleBookmark={() => toggleBookmark(selectedCategory, selectedTopic)}
+        onSaveNote={note => saveNote(selectedCategory, selectedTopic, note)}
+        onUpdateProgress={patch => updateProgress(selectedCategory, selectedTopic, patch)}
+        onOpenTopic={topic => openTopic(selectedCategory, topic)}
+        related={related}
       />
     )
   }
-
-  if (selectedCat) {
-    return (
-      <CategoryView
-        catObj={selectedCat}
-        lang={lang}
-        onBack={() => setSelectedCat(null)}
-        onTopic={(topic) => openTopic(selectedCat, topic)}
-        onToggleBookmark={(topic) => toggleBookmark(selectedCat, topic)}
-        bookmarks={bookmarkSet}
-        seen={seenSet}
-      />
-    )
-  }
-
-  const roadmap = [
-    { level: 'A1', note: 'საფუძვლები' },
-    { level: 'A2', note: 'გავრცობა' },
-    { level: 'B1', note: 'თვითგამოხატვა' },
-    { level: 'B2', note: 'წინადადებების გაძლიერება' },
-    { level: 'C1', note: 'ნიუანსები' },
-    { level: 'C2', note: 'სრული სიზუსტე' },
-  ]
 
   return (
     <div style={{ padding: 16, fontFamily: "'Inter',system-ui,sans-serif" }}>
       <div style={{ marginBottom: 18 }}>
-        <div style={{ color: C.t, fontWeight: 900, fontSize: 24 }}>📖 გრამატიკა</div>
-        <div style={{ color: C.ts, fontSize: 13, marginTop: 5, lineHeight: 1.6 }}>
-          {currentLang.flag} {currentLang.name} · გაკვეთილები, მაგალითები, ფავორიტები და პროგრესი ერთ სივრცეში
-        </div>
+        <div style={{ color: C.t, fontWeight: 900, fontSize: 25 }}>📖 გრამატიკა</div>
+        <div style={{ color: C.ts, fontSize: 13, marginTop: 5, lineHeight: 1.7 }}>{LANG[lang]?.flag} {LANG[lang]?.name} · სრული სასწავლო სივრცე</div>
+      </div>
+
+      {error && <div style={{ marginBottom: 12, padding: 12, borderRadius: 12, background: `${C.r}14`, border: `1px solid ${C.r}55`, color: C.r, fontSize: 13, lineHeight: 1.6 }}>⚠️ Backend შეცდომა: {error}</div>}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10, marginBottom: 12 }}>
+        <StatCard icon="📚" label="თემები" value={totalTopics} C={C} gls={gls} />
+        <StatCard icon="📈" label="საშუალო mastery" value={`${averageMastery}%`} C={C} gls={gls} />
+        <StatCard icon="🏆" label="ათვისებული" value={masteredCount} C={C} gls={gls} />
+        <StatCard icon="⭐" label="ფავორიტები" value={bookmarks.size} C={C} gls={gls} />
       </div>
 
       <div style={{ ...gls({ padding: 14, marginBottom: 12 }) }}>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <div style={{ position: 'relative' }}>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="ძიება: ბრუნვა, ზმნა, არტიკლი, მაგალითი..."
-              style={{
-                width: '100%',
-                borderRadius: 14,
-                border: `1px solid ${C.bdL}`,
-                background: C.card2,
-                color: C.t,
-                fontSize: 14,
-                padding: '13px 14px',
-                outline: 'none',
-                fontFamily: 'inherit',
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {[
-              { key: 'all', label: 'ყველა' },
-              { key: 'bookmarks', label: 'რჩეულები' },
-              { key: 'seen', label: 'ნანახი' },
-            ].map(chip => (
-              <button
-                key={chip.key}
-                onClick={() => setMode(chip.key)}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 999,
-                  border: `1px solid ${mode === chip.key ? C.a : C.bdL}`,
-                  background: mode === chip.key ? `${C.a}18` : C.card3,
-                  color: mode === chip.key ? C.a : C.ts,
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontFamily: 'inherit',
-                }}
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12 }}>
-        {[
-          { label: 'კატეგორიები', value: cats.length, icon: '🗂️' },
-          { label: 'თემები', value: totalTopics, icon: '📚' },
-          { label: 'ფავორიტები', value: bookmarkedTopics, icon: '★' },
-          { label: 'ნანახი', value: seenTopics, icon: '👀' },
-        ].map(item => (
-          <div key={item.label} style={{ ...gls({ padding: 14 }) }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-              <div>
-                <div style={{ color: C.ts, fontSize: 12, marginBottom: 6 }}>{item.icon} {item.label}</div>
-                <div style={{ color: C.t, fontWeight: 900, fontSize: 22 }}>{item.value}</div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ ...gls({ padding: 14, marginBottom: 12 }) }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 10 }}>
-          <div>
-            <div style={{ color: C.t, fontWeight: 800, fontSize: 15 }}>📈 საერთო პროგრესი</div>
-            <div style={{ color: C.ts, fontSize: 12, marginTop: 4 }}>{progressPct}% ნანახი თემებიდან</div>
-          </div>
-          <div style={{ color: C.a, fontWeight: 900, fontSize: 18 }}>{progressPct}%</div>
-        </div>
-        <div style={{ background: C.card3, borderRadius: 999, height: 8, overflow: 'hidden' }}>
-          <div style={{ width: `${progressPct}%`, height: '100%', background: `linear-gradient(90deg,${C.a},${C.p})` }} />
-        </div>
-      </div>
-
-      <div style={{ ...gls({ padding: 14, marginBottom: 12 }) }}>
-        <div style={{ color: C.t, fontWeight: 800, fontSize: 15, marginBottom: 10 }}>🧭 სწავლის გზა</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {roadmap.map(item => (
-            <div
-              key={item.level}
-              style={{
-                padding: '8px 10px',
-                borderRadius: 999,
-                border: `1px solid ${C.bdL}`,
-                background: C.card2,
-                color: C.t,
-                fontSize: 12,
-              }}
-            >
-              <strong>{item.level}</strong> · {item.note}
-            </div>
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="🔎 მოძებნე გრამატიკული თემა..." style={{ width: '100%', boxSizing: 'border-box', borderRadius: 13, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, padding: '13px 14px', fontFamily: 'inherit', fontSize: 14, outline: 'none' }} />
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+          {[['all', 'ყველა'], ['learning', 'ვწავლობ'], ['mastered', 'ათვისებული'], ['bookmarks', 'რჩეულები']].map(([value, label]) => (
+            <button key={value} onClick={() => setFilter(value)} style={{ border: `1px solid ${filter === value ? C.a : C.bdL}`, background: filter === value ? `${C.a}18` : C.card3, color: filter === value ? C.a : C.ts, borderRadius: 999, padding: '8px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>{label}</button>
           ))}
         </div>
-        <div style={{ color: C.ts, fontSize: 12, lineHeight: 1.6, marginTop: 10 }}>
-          ეს ხედვა გეხმარება თემების სწორად დალაგებაში. შენს კონტენტს უკვე აქვს მასალა, ახლა მხოლოდ სარწმუნო ნავიგაცია სჭირდება.
-        </div>
       </div>
 
-      {lastTopic && (
-        <div style={{ ...gls({ padding: 16, marginBottom: 12 }), background: `linear-gradient(135deg,${C.card2},${C.card3})` }}>
-          <div style={{ color: C.ts, fontSize: 12, marginBottom: 6 }}>⏭️ გაგრძელება იქიდან, სადაც შეჩერდი</div>
-          <div style={{ color: C.t, fontWeight: 900, fontSize: 18, marginBottom: 4 }}>{lastTopic.topic.title}</div>
-          <div style={{ color: C.ts, fontSize: 12, lineHeight: 1.6, marginBottom: 12 }}>{topicSummary(lastTopic.topic)}</div>
-          <button
-            onClick={() => openTopic(lastTopic.cat, lastTopic.topic)}
-            style={{
-              padding: '10px 14px',
-              borderRadius: 12,
-              border: 'none',
-              background: `linear-gradient(135deg,${C.a},${C.p})`,
-              color: '#fff',
-              fontWeight: 800,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            განაგრძე სწავლა
-          </button>
-        </div>
-      )}
+      <div style={{ ...gls({ padding: 14, marginBottom: 12 }) }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', color: C.ts, fontSize: 12, marginBottom: 7 }}><span>საერთო პროგრესი</span><strong style={{ color: C.a }}>{averageMastery}%</strong></div>
+        <div style={{ height: 8, borderRadius: 999, background: C.card3, overflow: 'hidden' }}><div style={{ width: `${averageMastery}%`, height: '100%', background: `linear-gradient(90deg,${C.a},${C.g})` }} /></div>
+        <div style={{ color: C.ts, fontSize: 12, marginTop: 8 }}>{seenCount} თემას უკვე გაეცანი · {totalTopics - seenCount} ჯერ კიდევ წინ გელოდება.</div>
+      </div>
 
-      {visibleCats.length > 0 ? (
-        <div style={{ display: 'grid', gap: 12 }}>
-          {visibleCats.map((cat) => (
-            <button
-              key={cat.cat}
-              onClick={() => setSelectedCat(cat)}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: 18,
-                background: `linear-gradient(135deg,${C.card2},${C.card3})`,
-                border: `1px solid ${C.bdL}`,
-                borderRadius: 18,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-                fontFamily: 'inherit',
-              }}
-            >
-              <span style={{ fontSize: 30 }}>{cat.icon}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 16 }}>{cat.cat}</div>
-                <div style={{ color: C.ts, fontSize: 12, marginTop: 4, lineHeight: 1.6 }}>
-                  {cat.topics.length} თემა · {cat.topics.map(t => t.title).slice(0, 3).join(', ')}{cat.topics.length > 3 ? '…' : ''}
-                </div>
-                <div style={{ marginTop: 10, background: C.card3, borderRadius: 999, height: 6, overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      width: `${cat.topics.length ? Math.round((cat.topics.filter(t => seenSet.has(topicId(lang, cat.cat, t.title))).length / cat.topics.length) * 100) : 0}%`,
-                      height: '100%',
-                      background: `linear-gradient(90deg,${C.a},${C.g})`,
-                    }}
-                  />
+      <div style={{ display: 'grid', gap: 12 }}>
+        {visibleCategories.map(category => {
+          const categorySeen = category.topics.filter(topic => (progress[keyOf(lang, category.cat, topic.title)]?.times_viewed || 0) > 0).length
+          return (
+            <section key={category.cat} style={gls({ padding: 16 })}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <span style={{ fontSize: 30 }}>{category.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: C.t, fontWeight: 900, fontSize: 17 }}>{category.cat}</div>
+                  <div style={{ color: C.ts, fontSize: 12, marginTop: 3 }}>{categorySeen}/{category.topics.length} ნანახი</div>
                 </div>
               </div>
-              <span style={{ color: C.a, fontSize: 18 }}>›</span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div style={{ ...gls({ padding: 18 }), color: C.ts, fontSize: 14, lineHeight: 1.7 }}>
-          შედეგი ვერ მოიძებნა. ძიება ან ფილტრი ზედმეტად მკაცრი აღმოჩნდა, როგორც ხშირად ხდება ადამიანებთან, როცა ყველაფერს ერთ ღილაკზე ეძებენ.
-        </div>
-      )}
+              <div style={{ display: 'grid', gap: 8 }}>
+                {category.topics.map(topic => {
+                  const id = keyOf(lang, category.cat, topic.title)
+                  const row = progress[id]
+                  return (
+                    <button key={topic.title} onClick={() => openTopic(category, topic)} style={{ textAlign: 'left', border: `1px solid ${C.bdL}`, background: C.card2, borderRadius: 13, padding: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ color: C.t, fontWeight: 800, fontSize: 14 }}>{topic.title}</div>
+                          <div style={{ color: C.ts, fontSize: 12, lineHeight: 1.6, marginTop: 4 }}>{topicSummary(topic)}</div>
+                        </div>
+                        <div style={{ color: bookmarks.has(id) ? C.gold : C.tm, fontSize: 18 }}>{bookmarks.has(id) ? '★' : '☆'}</div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 9 }}>
+                        <span style={{ color: C.ts, fontSize: 11 }}>{STATUS[row?.status || 'new'].icon} {STATUS[row?.status || 'new'].label}</span>
+                        <span style={{ color: C.a, fontSize: 11, fontWeight: 800 }}>{row?.mastery || 0}%</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          )
+        })}
+      </div>
+
+      {!visibleCategories.length && <div style={{ ...gls({ padding: 18 }), color: C.ts, lineHeight: 1.7 }}>🔎 ამ ფილტრით ან საძიებო სიტყვით გრამატიკული თემა ვერ მოიძებნა.</div>}
     </div>
   )
 }
