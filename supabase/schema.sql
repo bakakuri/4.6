@@ -79,7 +79,7 @@ create table public.grammar_notes (
   category   text not null,
   topic      text not null,
   note       text not null,
-  updated_at timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
   unique (user_id, lang, category, topic)
 );
 
@@ -116,7 +116,7 @@ create policy "profiles_insert" on public.profiles for insert with check (auth.u
 create policy "profiles_update" on public.profiles for update using (auth.uid() = id);
 
 -- word_progress: მხოლოდ owner
-create policy "wp_all" on public.word_progress for all using (auth.uid() = user_id);
+create policy "wp_all" on public.word_progress for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- chat: ყველა კითხულობს, authenticated წერს
 create policy "chat_select" on public.chat_messages for select using (true);
@@ -126,20 +126,78 @@ create policy "chat_delete_admin" on public.chat_messages for delete using (
 );
 
 -- activity: მხოლოდ owner
-create policy "act_all" on public.activity for all using (auth.uid() = user_id);
+create policy "act_all" on public.activity for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- grammar: მხოლოდ საკუთარი სასწავლო მონაცემები
-create policy "grammar_progress_owner" on public.grammar_progress
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- Explicit SELECT/INSERT/UPDATE policies help Supabase return newly written rows
+-- during upsert flows without tripping RLS on RETURNING.
+create policy "grammar_progress_select" on public.grammar_progress
+  for select to authenticated
+  using (auth.uid() = user_id);
 
-create policy "grammar_bookmarks_owner" on public.grammar_bookmarks
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "grammar_progress_insert" on public.grammar_progress
+  for insert to authenticated
+  with check (auth.uid() = user_id);
 
-create policy "grammar_notes_owner" on public.grammar_notes
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "grammar_progress_update" on public.grammar_progress
+  for update to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
-create policy "grammar_sessions_owner" on public.grammar_sessions
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "grammar_progress_delete" on public.grammar_progress
+  for delete to authenticated
+  using (auth.uid() = user_id);
+
+create policy "grammar_bookmarks_select" on public.grammar_bookmarks
+  for select to authenticated
+  using (auth.uid() = user_id);
+
+create policy "grammar_bookmarks_insert" on public.grammar_bookmarks
+  for insert to authenticated
+  with check (auth.uid() = user_id);
+
+create policy "grammar_bookmarks_update" on public.grammar_bookmarks
+  for update to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "grammar_bookmarks_delete" on public.grammar_bookmarks
+  for delete to authenticated
+  using (auth.uid() = user_id);
+
+create policy "grammar_notes_select" on public.grammar_notes
+  for select to authenticated
+  using (auth.uid() = user_id);
+
+create policy "grammar_notes_insert" on public.grammar_notes
+  for insert to authenticated
+  with check (auth.uid() = user_id);
+
+create policy "grammar_notes_update" on public.grammar_notes
+  for update to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "grammar_notes_delete" on public.grammar_notes
+  for delete to authenticated
+  using (auth.uid() = user_id);
+
+create policy "grammar_sessions_select" on public.grammar_sessions
+  for select to authenticated
+  using (auth.uid() = user_id);
+
+create policy "grammar_sessions_insert" on public.grammar_sessions
+  for insert to authenticated
+  with check (auth.uid() = user_id);
+
+create policy "grammar_sessions_update" on public.grammar_sessions
+  for update to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "grammar_sessions_delete" on public.grammar_sessions
+  for delete to authenticated
+  using (auth.uid() = user_id);
 
 -- ── Trigger: პროფილი auto-create რეგისტრაციაზე ──────────────
 create or replace function public.handle_new_user()
