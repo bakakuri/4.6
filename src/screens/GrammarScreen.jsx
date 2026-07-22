@@ -30,7 +30,7 @@ function normalizeText(value = '') {
   return String(value)
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u0300-ͯ]/g, '')
     .replace(/ß/g, 'ss')
     .replace(/\s+/g, ' ')
     .trim()
@@ -627,6 +627,7 @@ export default function GrammarScreen({ lang }) {
   }
 
   const openTopic = (category, topic) => {
+    void saveProgress(category, topic, { view: true })
     setSelected({ category, topic })
     setMode('topic')
   }
