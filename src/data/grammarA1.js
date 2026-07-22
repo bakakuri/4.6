@@ -1,0 +1,51 @@
+const A1 = [
+  { cat: 'A1 · Grundlagen', icon: '🌱', topics: [
+    { title: 'A1 · Personalpronomen — პირის ნაცვალსახელები', body: `გერმანულში პირის ნაცვალსახელები აჩვენებს ვინ ასრულებს მოქმედებას.\n\nich = მე\ndu = შენ\ner = ის (მამრ.)\nsie = ის (მდედრ.)\nes = ის (საშ.)\nwir = ჩვენ\nihr = თქვენ (მრავლ.)\nsie = ისინი\nSie = თქვენ (თავაზიანი ფორმა)\n\n⚠️ Sie ყოველთვის დიდი ასოთი იწერება.`, ex: ['Ich lerne Deutsch. — მე გერმანულს ვსწავლობ.', 'Wir wohnen in Berlin. — ჩვენ ბერლინში ვცხოვრობთ.'] },
+    { title: 'A1 · sein — ყოფნა', body: `sein ნიშნავს „ყოფნას“ და ერთ-ერთი ყველაზე მნიშვნელოვანი არარეგულარული ზმნაა.\n\nich bin\ndu bist\ner/sie/es ist\nwir sind\nihr seid\nsie/Sie sind\n\nმაგალითი: Ich bin Georgisch.`, ex: ['Ich bin müde. — დაღლილი ვარ.', 'Sie ist Lehrerin. — ის მასწავლებელია.'] },
+    { title: 'A1 · haben — ქონა', body: `haben ნიშნავს „ქონას“.\n\nich habe · du hast · er hat · wir haben · ihr habt · sie haben\n\n⚠️ du hast და er hat არარეგულარული ფორმებია.`, ex: ['Ich habe Zeit.', 'Wir haben ein Auto.'] },
+    { title: 'A1 · Präsens — აწმყო დრო', body: `რეგულარული ზმნის დაბოლოებებია:\n\nich -e · du -st · er/sie/es -t · wir -en · ihr -t · sie/Sie -en\n\nმაგალითი: lernen → ich lerne, du lernst, er lernt.`, ex: ['Ich lerne Deutsch.', 'Du arbeitest heute.'] },
+    { title: 'A1 · Satzbau — წინადადების წყობა', body: `მთავარ გერმანულ წინადადებაში ზმნა ჩვეულებრივ მეორე პოზიციაზე დგას.\n\nსუბიექტი + ზმნა + დანარჩენი\nIch lerne Deutsch.\n\nდროის გარემოების წინ წამოწევისას ზმნა მაინც მეორე პოზიციაზე რჩება:\nHeute lerne ich Deutsch.`, ex: ['Morgen fahre ich nach Berlin.', 'Am Montag arbeite ich.'] },
+    { title: 'A1 · Fragen — კითხვითი წინადადებები', body: `Ja/Nein კითხვაში ზმნა პირველ პოზიციაზე დგას:\nKommst du?\n\nკითხვითი სიტყვები:\nwer = ვინ · was = რა · wo = სად · wann = როდის · warum = რატომ · wie = როგორ`, ex: ['Wo wohnst du?', 'Wie heißt du?'] },
+    { title: 'A1 · W-Fragen — კითხვითი სიტყვები', body: `W-Frage + ზმნა + სუბიექტი.\n\nWo wohnst du?\nWas machst du?\nWann kommst du?\n\nკითხვითი სიტყვა წინადადების ინფორმაციას განსაზღვრავს.`, ex: ['Warum lernst du Deutsch?', 'Wie geht es dir?'] },
+    { title: 'A1 · Negation: nicht — უარყოფა', body: `nicht უარყოფს ზმნას, ზედსართავს ან კონკრეტულ ინფორმაციას.\n\nIch komme nicht.\nDas ist nicht gut.\n\n⚠️ არსებით სახელთან ხშირად kein გამოიყენება.`, ex: ['Ich arbeite heute nicht.', 'Das ist nicht richtig.'] },
+    { title: 'A1 · Negation: kein — kein-ის გამოყენება', body: `kein გამოიყენება არსებითი სახელის უარყოფისას.\n\nIch habe ein Auto. → Ich habe kein Auto.\n\nkein იცვლება არტიკლის მსგავსად.`, ex: ['Ich habe keine Zeit.', 'Das ist kein Problem.'] },
+    { title: 'A1 · Modalverben — მოდალური ზმნები', body: `მოდალური ზმნა მეორე პოზიციაზეა, მთავარი ზმნა კი Infinitiv-ში წინადადების ბოლოს.\n\nkönnen = შეძლება · müssen = აუცილებლობა · wollen = სურვილი · dürfen = ნებართვა · sollen = მოვალეობა · mögen = მოწონება`, ex: ['Ich kann Deutsch sprechen.', 'Du musst heute arbeiten.'] },
+  ]},
+  { cat: 'A1 · Artikel & Nomen', icon: '📝', topics: [
+    { title: 'A1 · Plural — მრავლობითი რიცხვი', body: `გერმანულში მრავლობითის ერთი უნივერსალური წესი არ არსებობს. ხშირად გამოიყენება -e, -er, -en, -n, -s ან Umlaut.\n\nder Tisch → die Tische\ndas Kind → die Kinder\ndie Frau → die Frauen\n\nმრავლობითში განსაზღვრული არტიკლი ყოველთვის die-ა.`, ex: ['ein Buch → viele Bücher', 'eine Frau → viele Frauen'] },
+    { title: 'A1 · Possessivartikel — კუთვნილება', body: `mein = ჩემი · dein = შენი · sein = მისი (მამრ.) · ihr = მისი (მდ.) · unser = ჩვენი · euer = თქვენი\n\nმათ დაბოლოება არსებითი სახელის სქესზეა დამოკიდებული.`, ex: ['Das ist mein Buch.', 'Ist das deine Tasche?'] },
+    { title: 'A1 · Adjektive — ზედსართავი სახელები', body: `ზედსართავი აღწერს არსებით სახელს. მარტივი predikative ფორმით დაბოლოება არ ემატება:\n\nDer Mann ist groß.\nDie Wohnung ist schön.\n\nატრიბუტიულ გამოყენებაში დაბოლოებები იცვლება.`, ex: ['Das Auto ist neu.', 'Die Stadt ist schön.'] },
+    { title: 'A1 · Zahlen & Uhrzeit — რიცხვები და დრო', body: `რიცხვები და დრო ყოველდღიური კომუნიკაციის საფუძველია.\n\nEs ist ein Uhr.\nEs ist zwei Uhr.\n\nნახევარი საათი გერმანულში მომდევნო საათთან მიმართებით ითქმის: halb drei = 2:30.`, ex: ['Es ist acht Uhr.', 'Wir treffen uns um drei Uhr.'] },
+    { title: 'A1 · Datum & Wochentage — თარიღი', body: `დღეები: Montag, Dienstag, Mittwoch, Donnerstag, Freitag, Samstag, Sonntag.\n\nთარიღი: am 22. Juli.\n\nდღეებთან ხშირად გამოიყენება am.`, ex: ['Heute ist Montag.', 'Am Freitag arbeite ich nicht.'] },
+  ]},
+  { cat: 'A1 · Kasus', icon: '🔄', topics: [
+    { title: 'A1 · Nominativ — ვინ? რა?', body: `Nominativ არის წინადადების სუბიექტი.\n\nder Mann · die Frau · das Kind · die Kinder\n\nსუბიექტი მოქმედებას ასრულებს.`, ex: ['Der Mann arbeitet.', 'Die Kinder spielen.'] },
+    { title: 'A1 · Akkusativ — პირდაპირი დამატება', body: `Akkusativ პასუხობს კითხვას ვის? რას?\n\nმამრობითში der → den და ein → einen.\ndie და das უცვლელია.`, ex: ['Ich sehe den Mann.', 'Ich kaufe einen Kaffee.'] },
+    { title: 'A1 · Dativ — ვის?', body: `Dativ ხშირად პასუხობს კითხვას „ვის?“ და გამოიყენება ბევრ ზმნასთან.\n\nder → dem · die → der · das → dem\n\nმაგალითი: Ich helfe dem Mann.`, ex: ['Ich helfe der Frau.', 'Ich gebe dem Kind ein Buch.'] },
+    { title: 'A1 · Präpositionen mit Akkusativ', body: `ძირითადი Akkusativ პრეპოზიციებია: durch, für, gegen, ohne, um.\n\nმათ შემდეგ არსებითი სახელი Akkusativ-ში დგას.`, ex: ['Das Geschenk ist für den Mann.', 'Ich gehe ohne dich.'] },
+    { title: 'A1 · Präpositionen mit Dativ', body: `ძირითადი Dativ პრეპოზიციებია: aus, bei, mit, nach, seit, von, zu.\n\nმათ შემდეგ Dativ გამოიყენება.`, ex: ['Ich fahre mit dem Bus.', 'Ich komme aus Deutschland.'] },
+  ]},
+  { cat: 'A1 · Verben & Zeiten', icon: '⚡', topics: [
+    { title: 'A1 · Trennbare Verben — გაყოფადი ზმნები', body: `გაყოფად ზმნებში პრეფიქსი მთავარ წინადადებაში ბოლოში გადადის.\n\naufstehen → Ich stehe um 7 Uhr auf.\n\nein + kaufen → Ich kaufe ein.`, ex: ['Ich stehe früh auf.', 'Wir kaufen heute ein.'] },
+    { title: 'A1 · Reflexive Verben — უკუქცევითი ზმნები', body: `ზოგი ზმნა მოითხოვს sich-ს ან მის ფორმას:\n\nich mich · du dich · er sich · wir uns · ihr euch · sie sich\n\nმაგ.: sich freuen.`, ex: ['Ich freue mich.', 'Du wäschst dich.'] },
+    { title: 'A1 · Imperativ — ბრძანებითი კილო', body: `Imperativ გამოიყენება თხოვნისა და ბრძანებისთვის.\n\nKomm! · Kommt! · Kommen Sie!\n\nთავაზიანი ფორმა იყენებს Sie-ს.`, ex: ['Komm bitte!', 'Sprechen Sie langsam!'] },
+    { title: 'A1 · Perfekt mit haben', body: `სასაუბრო წარსულში უმეტეს ზმნებთან გამოიყენება haben + Partizip II.\n\nIch habe gearbeitet.\nIch habe gelernt.`, ex: ['Wir haben gegessen.', 'Sie hat gelernt.'] },
+    { title: 'A1 · Perfekt mit sein', body: `გადაადგილებისა და მდგომარეობის ცვლილების ბევრ ზმნასთან გამოიყენება sein.\n\ngehen → ist gegangen\nkommen → ist gekommen\nfahren → ist gefahren`, ex: ['Ich bin nach Hause gegangen.', 'Sie ist gekommen.'] },
+    { title: 'A1 · Partizip II — ძირითადი წესები', body: `რეგულარული ზმნების Partizip II ხშირად იქმნება ge- + ფუძე + -t.\n\nmachen → gemacht\nlernen → gelernt\n\nარარეგულარული ზმნები ცალკე უნდა ისწავლო.`, ex: ['Ich habe gemacht.', 'Wir haben gelernt.'] },
+    { title: 'A1 · sein & haben im Präteritum', body: `sein-ის Präteritum: ich war, du warst, er war, wir waren.\nhaben-ის Präteritum: ich hatte, du hattest, er hatte, wir hatten.\n\nეს ფორმები ყოველდღიურ ენაშიც ძალიან ხშირად გვხვდება.`, ex: ['Ich war gestern müde.', 'Wir hatten keine Zeit.'] },
+  ]},
+  { cat: 'A1 · Satzstruktur', icon: '🧩', topics: [
+    { title: 'A1 · Verbzweitstellung — ზმნა მეორე პოზიციაზე', body: `მთავარ წინადადებაში კონიუგირებული ზმნა მეორე პოზიციაზეა.\n\nHeute lerne ich Deutsch.\n\n„Heute“ პირველ პოზიციაზე გადავიდა, მაგრამ ზმნა მაინც მეორეა.`, ex: ['Morgen fahre ich nach Berlin.', 'Am Abend sehe ich fern.'] },
+    { title: 'A1 · Satzklammer — წინადადების ჩარჩო', body: `მოდალურ და გაყოფად ზმნებში წინადადება ქმნის ჩარჩოს: ერთი ნაწილი მეორე პოზიციაზე, მეორე ბოლოში.\n\nIch kann heute nicht kommen.\nIch stehe früh auf.`, ex: ['Wir müssen morgen arbeiten.', 'Er ruft seine Mutter an.'] },
+    { title: 'A1 · Konjunktionen: und, aber, oder', body: `und, aber, oder აერთებს წინადადებებს. მათ შემდეგ ჩვეულებრივი მთავარი წინადადების წყობა რჩება.`, ex: ['Ich lerne und ich arbeite.', 'Ich komme, aber ich bleibe nicht lange.'] },
+    { title: 'A1 · weil — იმიტომ რომ', body: `weil ქმნის დაქვემდებარებულ წინადადებას და ზმნა ბოლოში გადადის.\n\nIch lerne Deutsch, weil ich in Deutschland lebe.`, ex: ['Ich bleibe zu Hause, weil ich krank bin.'] },
+    { title: 'A1 · dass — რომ', body: `dass-ით დაწყებულ დაქვემდებარებულ წინადადებაში ზმნა ბოლოში დგას.\n\nIch weiß, dass du Deutsch lernst.`, ex: ['Ich glaube, dass er heute kommt.'] },
+    { title: 'A1 · wenn — როცა/თუ', body: `wenn შეიძლება ნიშნავდეს „როცა“ ან „თუ“. დაქვემდებარებულ წინადადებაში ზმნა ბოლოში გადადის.`, ex: ['Wenn ich Zeit habe, lerne ich.', 'Wenn es regnet, bleibe ich zu Hause.'] },
+    { title: 'A1 · Infinitiv mit zu — zu + ინფინიტივი', body: `ზოგიერთ კონსტრუქციაში გამოიყენება zu + Infinitiv.\n\nIch versuche, Deutsch zu lernen.\n\nმოდალურ ზმნებთან ჩვეულებრივ zu არ გამოიყენება.`, ex: ['Ich beginne, Deutsch zu lernen.', 'Es ist wichtig, zu üben.'] },
+    { title: 'A1 · Lokale Präpositionen — ადგილის პრეპოზიციები', body: `ადგილის ძირითადი პრეპოზიციებია in, an, auf, neben, unter, vor, hinter.\n\nWo? ხშირად Dativ. Wohin? ხშირად Akkusativ.`, ex: ['Ich bin in der Schule.', 'Ich gehe in die Schule.'] },
+    { title: 'A1 · Temporale Präpositionen — დრო', body: `დროის ხშირი პრეპოზიციებია am, um, im, von...bis.\n\nam Montag · um acht Uhr · im Sommer`, ex: ['Ich arbeite am Montag.', 'Der Kurs beginnt um acht Uhr.'] },
+    { title: 'A1 · A1 Wiederholung — სრული გამეორება', body: `A1-ის საბოლოო გამეორებაში უნდა შეძლო: არტიკლების გამოყენება, ძირითადი ბრუნვები, Präsens, Perfekt-ის საფუძველი, მოდალური ზმნები, კითხვები, უარყოფა და ძირითადი წინადადების წყობა.`, ex: ['Ich kann mich vorstellen.', 'Ich kann über meinen Alltag sprechen.'] },
+  ]},
+]
+
+export default A1
