@@ -5,7 +5,6 @@ import { supabase } from '../lib/supabase.js'
 import GR from '../data/grammar.js'
 import A1 from '../data/grammarA1.js'
 import { getGrammarExercises } from '../data/grammarExercises.js'
-import { createA1Exercises } from '../data/a1ExerciseFactory.js'
 import { getNextReviewDate } from '../data/grammarReview.js'
 
 const STATUS = { new: ['ახალი', '⚪'], learning: ['ვწავლობ', '🔵'], review: ['გამეორება', '🟡'], mastered: ['ათვისებული', '🟢'] }
@@ -15,6 +14,205 @@ const keyOf = (lang, category, topic) => `${lang}::${category}::${topic}`
 const topicSummary = topic => ((topic?.ex?.[0] || topic?.body || '').split('\n').map(x => x.replace(/^\*\*|\*\*$/g, '').replace(/^•\s*/, '').trim()).find(Boolean) || 'გრამატიკული წესები, ახსნა და მაგალითები.').slice(0, 150)
 function renderBody(body = '', C) { return body.split('\n').map((line, i) => { const t = line.trim(); if (!t) return <div key={i} style={{ height: 7 }} />; if (/^\*\*.*\*\*$/.test(t)) return <h3 key={i} style={{ color: C.t, fontSize: 16 }}>{t.replace(/\*\*/g, '')}</h3>; if (/^(⚠️|✅|💡)/.test(t)) return <div key={i} style={{ borderLeft: `3px solid ${t.startsWith('⚠️') ? C.o : C.g}`, background: C.card3, borderRadius: 10, padding: 11, color: C.ts, lineHeight: 1.7 }}>{t}</div>; if (t.startsWith('•')) return <div key={i} style={{ color: C.ts, lineHeight: 1.7, marginBottom: 4 }}>• {t.slice(1).trim()}</div>; return <p key={i} style={{ color: C.ts, lineHeight: 1.8, margin: '6px 0' }}>{t}</p> }) }
 function Stat({ icon, label, value, C, gls }) { return <div style={gls({ padding: 14 })}><div style={{ color: C.ts, fontSize: 12 }}>{icon} {label}</div><div style={{ color: C.t, fontSize: 23, fontWeight: 900, marginTop: 6 }}>{value}</div></div> }
-function Practice({ exercises, progress, onAnswer, C, gls }) { const [index, setIndex] = useState(0); const [value, setValue] = useState(''); const [selected, setSelected] = useState(null); const [answered, setAnswered] = useState(false); const [score, setScore] = useState(0); const ex = exercises[index]; if (!ex) return <section style={gls({ padding: 18 })}><div style={{ color: C.ts }}>ამ თემისთვის სავარჯიშოები მალე დაემატება.</div></section>; const check = answer => { if (answered) return; const correct = normalize(answer) === normalize(ex.answer); setSelected(answer); setAnswered(true); if (correct) setScore(s => s + 1); onAnswer({ correct, exercise: ex, userAnswer: answer }) }; const next = () => { setIndex(i => (i + 1) % exercises.length); setValue(''); setSelected(null); setAnswered(false) }; const typeLabel = { multiple_choice: '🧪 არჩევანი', fill_blank: '✍️ ჩასვი პასუხი', sentence_builder: '🔀 ააწყვე წინადადება', error_correction: '🛠️ გაასწორე შეცდომა', translation: '🌍 თარგმანი' }[ex.type]; return <section style={gls({ padding: 18 })}><div style={{ display: 'flex', justifyContent: 'space-between', color: C.ts, fontSize: 12, marginBottom: 12 }}><span>🧪 {typeLabel}</span><span>{index + 1}/{exercises.length} · Score {score}</span></div><div style={{ height: 7, background: C.card3, borderRadius: 99, overflow: 'hidden', marginBottom: 15 }}><div style={{ width: `${((index + 1) / exercises.length) * 100}%`, height: '100%', background: `linear-gradient(90deg,${C.a},${C.g})` }} /></div><div style={{ background: C.card3, borderRadius: 14, padding: 16 }}><div style={{ color: C.t, fontSize: 18, fontWeight: 800, lineHeight: 1.6 }}>{ex.question}</div>{ex.type === 'multiple_choice' && <div style={{ display: 'grid', gap: 8, marginTop: 15 }}>{ex.options.map(o => <button key={o} onClick={() => check(o)} style={{ textAlign: 'left', padding: 12, borderRadius: 11, border: `1px solid ${answered && o === ex.answer ? C.g : answered && o === selected ? C.r : C.bdL}`, background: answered && o === ex.answer ? `${C.g}18` : answered && o === selected ? `${C.r}18` : C.card2, color: C.t, fontFamily: 'inherit' }}>{answered && o === ex.answer ? '✅ ' : answered && o === selected ? '❌ ' : ''}{o}</button>)}</div>}{(ex.type === 'fill_blank' || ex.type === 'error_correction' || ex.type === 'translation') && <div style={{ marginTop: 15 }}><input value={value} onChange={e => setValue(e.target.value)} disabled={answered} placeholder="ჩაწერე პასუხი..." style={{ width: '100%', boxSizing: 'border-box', padding: 12, borderRadius: 11, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }} /><button onClick={() => check(value)} disabled={!value.trim() || answered} style={{ width: '100%', marginTop: 8, border: 'none', borderRadius: 11, padding: 12, background: C.a, color: '#fff', fontWeight: 800 }}>შემოწმება</button></div>}{ex.type === 'sentence_builder' && <div style={{ marginTop: 15 }}><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', minHeight: 42 }}>{(selected ? selected.split(' ') : []).map((x, i) => <span key={i} style={{ padding: '7px 10px', borderRadius: 9, background: C.a, color: '#fff' }}>{x}</span>)}</div><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 10 }}>{ex.tokens.map((token, i) => <button key={`${token}-${i}`} disabled={answered} onClick={() => setSelected(s => s ? `${s} ${token}` : token)} style={{ padding: '8px 10px', borderRadius: 9, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t }}>{token}</button>)}</div><button onClick={() => check(selected || '')} disabled={!selected || answered} style={{ width: '100%', marginTop: 10, border: 'none', borderRadius: 11, padding: 12, background: C.a, color: '#fff', fontWeight: 800 }}>შემოწმება</button></div>}</div>{answered && <div style={{ marginTop: 12, borderLeft: `3px solid ${normalize(selected) === normalize(ex.answer) ? C.g : C.o}`, background: C.card3, borderRadius: 10, padding: 12, color: C.ts, lineHeight: 1.7 }}><strong style={{ color: normalize(selected) === normalize(ex.answer) ? C.g : C.o }}>{normalize(selected) === normalize(ex.answer) ? 'სწორია! 🎉' : `სწორი პასუხი: ${ex.answer}`}</strong><br />{ex.explanation}</div>}{answered && <button onClick={next} style={{ marginTop: 12, width: '100%', border: 'none', borderRadius: 11, padding: 12, background: C.a, color: '#fff', fontWeight: 800 }}>შემდეგი კითხვა →</button>}<div style={{ color: C.ts, fontSize: 12, marginTop: 12 }}>ამ თემის სტატისტიკა: {progress?.correct_count || 0} სწორი · {progress?.wrong_count || 0} შეცდომა</div></section> }
-function TopicPage({ lang, category, topic, progress, bookmarked, note, onBack, onBookmark, onNote, onAnswer, onStatus, related, C, gls }) { const [draft, setDraft] = useState(note || ''); const exercises = getGrammarExercises(lang, topic.title).length ? getGrammarExercises(lang, topic.title) : createA1Exercises(topic); useEffect(() => setDraft(note || ''), [note]); return <div style={{ padding: 16 }}><button onClick={onBack} style={{ border: `1px solid ${C.bdL}`, background: C.card3, color: C.ts, borderRadius: 11, padding: '9px 14px', marginBottom: 14 }}>← უკან</button><section style={gls({ padding: 18, marginBottom: 12 })}><div style={{ display: 'flex', justifyContent: 'space-between' }}><div><div style={{ color: C.ts, fontSize: 12 }}>{LANG[lang]?.flag} {category.cat}</div><h1 style={{ color: C.t, fontSize: 24, margin: '7px 0' }}>{topic.title}</h1><div style={{ color: C.ts }}>{topicSummary(topic)}</div></div><button onClick={onBookmark} style={{ fontSize: 23, border: `1px solid ${bookmarked ? C.gold : C.bdL}`, borderRadius: 12, background: C.card3, color: bookmarked ? C.gold : C.ts }}>{bookmarked ? '★' : '☆'}</button></div><div style={{ marginTop: 15, color: C.ts }}>Mastery <strong style={{ color: C.a }}>{progress?.mastery || 0}%</strong></div><div style={{ height: 8, background: C.card3, borderRadius: 99, marginTop: 6 }}><div style={{ width: `${progress?.mastery || 0}%`, height: '100%', background: C.a, borderRadius: 99 }} /></div><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 12 }}>{Object.entries(STATUS).map(([k, [label, icon]]) => <button key={k} onClick={() => onStatus(k)} style={{ padding: '7px 10px', borderRadius: 99, border: `1px solid ${(progress?.status || 'new') === k ? C.a : C.bdL}`, background: C.card3, color: C.ts }}>{icon} {label}</button>)}</div></section><section style={gls({ padding: 18, marginBottom: 12 })}><h2 style={{ color: C.t, fontSize: 17 }}>📘 სრული ახსნა</h2>{renderBody(topic.body, C)}</section>{topic.ex?.length > 0 && <section style={gls({ padding: 18, marginBottom: 12 })}><h2 style={{ color: C.t, fontSize: 17 }}>📌 მაგალითები</h2>{topic.ex.map((x, i) => <div key={i} style={{ background: C.card3, borderRadius: 10, padding: 11, color: C.t, marginTop: 7 }}>{x}</div>)}</section>}<Practice exercises={exercises} progress={progress} onAnswer={onAnswer} C={C} gls={gls} /><section style={gls({ padding: 18, marginTop: 12 })}><h2 style={{ color: C.t, fontSize: 17 }}>🧠 ჩემი ჩანაწერი</h2><textarea value={draft} onChange={e => setDraft(e.target.value)} rows={5} placeholder="ჩაწერე შენი წესი..." style={{ width: '100%', boxSizing: 'border-box', background: C.card2, color: C.t, border: `1px solid ${C.bdL}`, borderRadius: 11, padding: 12, fontFamily: 'inherit' }} /><button onClick={() => onNote(draft)} style={{ marginTop: 9, border: 'none', borderRadius: 10, padding: 10, background: C.a, color: '#fff', fontWeight: 800 }}>შენახვა</button></section>{related.length > 0 && <section style={gls({ padding: 18, marginTop: 12 })}><h2 style={{ color: C.t, fontSize: 17 }}>🔁 დაკავშირებული თემები</h2>{related.map(x => <button key={x.title} onClick={() => onBack(x)} style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 8, padding: 12, borderRadius: 10, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t }}>{x.title}</button>)}</section>}</div> }
-export default function GrammarScreen({ lang }) { const { C, gls } = useTheme(); const baseCategories = GR[lang] || GR.german || []; const categories = lang === 'german' ? [...A1, ...baseCategories] : baseCategories; const [userId, setUserId] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [query, setQuery] = useState(''); const [filter, setFilter] = useState('all'); const [selected, setSelected] = useState(null); const [progress, setProgress] = useState({}); const [bookmarks, setBookmarks] = useState(new Set()); const [notes, setNotes] = useState({}); const [due, setDue] = useState([]); const [achievements, setAchievements] = useState([]); const [challenge, setChallenge] = useState({ target: 5, completed: 0 }); useEffect(() => { let active = true; (async () => { setLoading(true); const { data: { user }, error: authError } = await supabase.auth.getUser(); if (!active) return; if (authError) setError(authError.message); if (!user) { setLoading(false); return } setUserId(user.id); const [p, b, n, m, a, d] = await Promise.all([supabase.from('grammar_progress').select('*').eq('user_id', user.id).eq('lang', lang), supabase.from('grammar_bookmarks').select('category,topic').eq('user_id', user.id).eq('lang', lang), supabase.from('grammar_notes').select('category,topic,note').eq('user_id', user.id).eq('lang', lang), supabase.from('grammar_mistakes').select('*').eq('user_id', user.id).eq('lang', lang).lte('next_review_at', new Date().toISOString()).order('next_review_at').limit(50), supabase.from('grammar_achievements').select('achievement_id').eq('user_id', user.id), supabase.from('grammar_daily_challenges').select('*').eq('user_id', user.id).eq('challenge_date', new Date().toISOString().slice(0, 10)).maybeSingle()]); if (!active) return; const first = p.error || b.error || n.error; if (first) setError(first.message); const pm = {}; (p.data || []).forEach(r => pm[keyOf(lang, r.category, r.topic)] = r); const nm = {}; (n.data || []).forEach(r => nm[keyOf(lang, r.category, r.topic)] = r.note); setProgress(pm); setBookmarks(new Set((b.data || []).map(r => keyOf(lang, r.category, r.topic)))); setNotes(nm); setDue(m.data || []); setAchievements((a.data || []).map(r => r.achievement_id)); setChallenge(d.data || { target: 5, completed: 0 }); setLoading(false) })(); return () => { active = false } }, [lang]); const allTopics = useMemo(() => categories.flatMap(c => (c.topics || []).map(topic => ({ category: c, topic }))), [categories]); const rows = Object.values(progress); const total = rows.reduce((s, r) => s + (r.correct_count || 0) + (r.wrong_count || 0), 0); const correct = rows.reduce((s, r) => s + (r.correct_count || 0), 0); const wrong = rows.reduce((s, r) => s + (r.wrong_count || 0), 0); const mastered = rows.filter(r => r.mastery >= 100 || r.status === 'mastered').length; const average = allTopics.length ? Math.round(rows.reduce((s, r) => s + (r.mastery || 0), 0) / allTopics.length) : 0; const accuracy = total ? Math.round(correct / total * 100) : 0; const seen = rows.filter(r => r.times_viewed > 0).length; const saveProgress = async (category, topic, patch) => { if (!userId) return; const id = keyOf(lang, category.cat, topic.title); const old = progress[id] || {}; const isAnswer = patch.answer !== undefined; const cc = (old.correct_count || 0) + (patch.answer?.correct ? 1 : 0); const wc = (old.wrong_count || 0) + (isAnswer && !patch.answer.correct ? 1 : 0); const mastery = isAnswer ? Math.max(old.mastery || 0, Math.min(100, Math.round(cc / Math.max(1, cc + wc) * 100))) : (patch.mastery ?? old.mastery ?? 0); const row = { user_id: userId, lang, category: category.cat, topic: topic.title, status: patch.status || (mastery >= 100 ? 'mastered' : mastery >= 50 ? 'review' : old.status || 'learning'), mastery, times_viewed: (old.times_viewed || 0) + (patch.view ? 1 : 0), correct_count: cc, wrong_count: wc, last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() }; setProgress(p => ({ ...p, [id]: row })); const { error: e } = await supabase.from('grammar_progress').upsert(row, { onConflict: 'user_id,lang,category,topic' }); if (e) setError(e.message); if (isAnswer) { const ex = patch.answer.exercise; if (!patch.answer.correct) { const mistake = { user_id: userId, lang, category: category.cat, topic: topic.title, exercise_id: ex.id, exercise_type: ex.type, question: ex.question, user_answer: patch.answer.userAnswer, correct_answer: ex.answer, explanation: ex.explanation, mistake_count: 1, review_count: 0, next_review_at: getNextReviewDate(1), last_answered_at: new Date().toISOString(), updated_at: new Date().toISOString() }; const { error: me } = await supabase.from('grammar_mistakes').upsert(mistake, { onConflict: 'user_id,lang,topic,exercise_id' }); if (me) setError(me.message) } const today = new Date().toISOString().slice(0, 10); const nextChallenge = Math.min(challenge.target, (challenge.completed || 0) + 1); setChallenge(c => ({ ...c, completed: nextChallenge })); await supabase.from('grammar_daily_challenges').upsert({ user_id: userId, challenge_date: today, target: challenge.target || 5, completed: nextChallenge, xp: nextChallenge * 10, completed_at: nextChallenge >= (challenge.target || 5) ? new Date().toISOString() : null }, { onConflict: 'user_id,challenge_date' }); const stats = { seen, correct: cc, total: cc + wc, accuracy: cc + wc ? Math.round(cc / (cc + wc) * 100) : 0, mastered }; for (const [aid, , test] of ACHIEVEMENTS) if (test(stats) && !achievements.includes(aid)) { await supabase.from('grammar_achievements').upsert({ user_id: userId, achievement_id: aid }, { onConflict: 'user_id,achievement_id' }); setAchievements(a => [...a, aid]) } } }; const saveNote = async (category, topic, note) => { if (!userId) return; const id = keyOf(lang, category.cat, topic.title); const clean = note.trim(); setNotes(n => ({ ...n, [id]: clean })); const result = clean ? await supabase.from('grammar_notes').upsert({ user_id: userId, lang, category: category.cat, topic: topic.title, note: clean, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lang,category,topic' }) : await supabase.from('grammar_notes').delete().match({ user_id: userId, lang, category: category.cat, topic: topic.title }); if (result.error) setError(result.error.message) }; const toggleBookmark = async (category, topic) => { const id = keyOf(lang, category.cat, topic.title); const exists = bookmarks.has(id); setBookmarks(s => { const n = new Set(s); exists ? n.delete(id) : n.add(id); return n }); const r = exists ? await supabase.from('grammar_bookmarks').delete().match({ user_id: userId, lang, category: category.cat, topic: topic.title }) : await supabase.from('grammar_bookmarks').insert({ user_id: userId, lang, category: category.cat, topic: topic.title }); if (r.error) setError(r.error.message) }; const visible = categories.map(c => ({ ...c, topics: (c.topics || []).filter(t => { const id = keyOf(lang, c.cat, t.title); const row = progress[id]; const q = normalize(query); const hay = normalize(`${c.cat} ${t.title} ${t.body} ${(t.ex || []).join(' ')}`); return (!q || hay.includes(q)) && (filter === 'all' || (filter === 'bookmarks' && bookmarks.has(id)) || (filter === 'mastered' && row?.mastery >= 100) || (filter === 'learning' && row?.status && row.status !== 'new')) }) })).filter(c => c.topics.length); if (loading) return <div style={{ padding: 20, color: C.ts }}>გრამატიკის მონაცემები იტვირთება...</div>; if (!userId) return <div style={{ padding: 20, color: C.ts }}>🔐 ავტორიზაცია საჭიროა.</div>; if (selected) { const { category, topic } = selected; const id = keyOf(lang, category.cat, topic.title); return <TopicPage lang={lang} category={category} topic={topic} progress={progress[id]} bookmarked={bookmarks.has(id)} note={notes[id] || ''} onBack={() => setSelected(null)} onBookmark={() => toggleBookmark(category, topic)} onNote={n => saveNote(category, topic, n)} onAnswer={a => saveProgress(category, topic, { answer: a })} onStatus={s => saveProgress(category, topic, { status: s })} related={(category.topics || []).filter(x => x.title !== topic.title).slice(0, 5)} C={C} gls={gls} /> } return <div style={{ padding: 16 }}><div style={{ marginBottom: 18 }}><div style={{ color: C.t, fontWeight: 900, fontSize: 25 }}>📖 გრამატიკა 3.0</div><div style={{ color: C.ts, fontSize: 13 }}>{LANG[lang]?.flag} {LANG[lang]?.name} · Learn → Practice → Mistakes → SRS → Mastery</div></div>{error && <div style={{ marginBottom: 12, padding: 12, borderRadius: 12, background: `${C.r}14`, border: `1px solid ${C.r}55`, color: C.r, lineHeight: 1.6 }}>⚠️ Backend შეცდომა: {error}<br /><small>თუ ეს არის RLS ან relation შეცდომა, გაუშვი <b>supabase/migrations/grammar_3_0.sql</b> Supabase SQL Editor-ში. სრული schema.sql თავიდან არ გაუშვა.</small></div>}<div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10, marginBottom: 12 }}><Stat icon="📚" label="თემები" value={allTopics.length} C={C} gls={gls} /><Stat icon="📈" label="საშუალო mastery" value={`${average}%`} C={C} gls={gls} /><Stat icon="🏆" label="ათვისებული" value={mastered} C={C} gls={gls} /><Stat icon="🎯" label="სიზუსტე" value={`${accuracy}%`} C={C} gls={gls} /></div><section style={gls({ padding: 14, marginBottom: 12 })}><div style={{ display: 'flex', justifyContent: 'space-between', color: C.ts }}><span>📅 დღევანდელი Challenge</span><strong style={{ color: C.a }}>{challenge.completed || 0}/{challenge.target || 5}</strong></div><div style={{ height: 8, background: C.card3, borderRadius: 99, marginTop: 8 }}><div style={{ width: `${Math.min(100, ((challenge.completed || 0) / (challenge.target || 5)) * 100)}%`, height: '100%', background: C.g, borderRadius: 99 }} /></div><div style={{ color: C.ts, fontSize: 12, marginTop: 7 }}>+{(challenge.completed || 0) * 10} XP · {due.length} SRS review due</div></section><section style={gls({ padding: 14, marginBottom: 12 })}><input value={query} onChange={e => setQuery(e.target.value)} placeholder="🔎 მოძებნე გრამატიკული თემა..." style={{ width: '100%', boxSizing: 'border-box', padding: 13, borderRadius: 12, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }} /><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>{[['all', 'ყველა'], ['learning', 'ვწავლობ'], ['mastered', 'ათვისებული'], ['bookmarks', 'რჩეულები']].map(([k, l]) => <button key={k} onClick={() => setFilter(k)} style={{ borderRadius: 99, padding: '8px 12px', border: `1px solid ${filter === k ? C.a : C.bdL}`, background: filter === k ? `${C.a}18` : C.card3, color: filter === k ? C.a : C.ts }}>{l}</button>)}</div></section><div style={{ color: C.ts, fontSize: 12, marginBottom: 10 }}>📖 {seen} ნანახი · ✅ {correct} სწორი · ❌ {wrong} შეცდომა · 🏅 {achievements.length} achievement</div>{visible.map(c => <section key={c.cat} style={gls({ padding: 14, marginBottom: 12 })}><h2 style={{ color: C.t, fontSize: 18, margin: '0 0 10px' }}>{c.icon} {c.cat}</h2>{c.topics.map(t => { const id = keyOf(lang, c.cat, t.title); const row = progress[id]; return <button key={t.title} onClick={() => { setSelected({ category: c, topic: t }); saveProgress(c, t, { view: true }) }} style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 8, padding: 14, borderRadius: 12, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong>{t.title}</strong><span style={{ color: C.a }}>{row?.mastery || 0}%</span></div><div style={{ color: C.ts, fontSize: 12, marginTop: 5 }}>{topicSummary(t)}</div></button> })}</section>)}</div> }
+function Practice({ exercises, progress, onAnswer, C, gls }) {
+  const safeExercises = Array.isArray(exercises) ? exercises.filter(Boolean) : []
+  const signature = safeExercises.map(e => e.id).join('|')
+  const [index, setIndex] = useState(0)
+  const [value, setValue] = useState('')
+  const [selected, setSelected] = useState(null)
+  const [answered, setAnswered] = useState(false)
+  const [score, setScore] = useState(0)
+
+  useEffect(() => {
+    setIndex(0)
+    setValue('')
+    setSelected(null)
+    setAnswered(false)
+    setScore(0)
+  }, [signature])
+
+  const ex = safeExercises[index] || safeExercises[0]
+  if (!ex) {
+    return <section style={gls({ padding: 18 })}><div style={{ color: C.ts }}>ამ თემისთვის სავარჯიშოები ჯერ არ არის დამატებული.</div></section>
+  }
+
+  const check = rawAnswer => {
+    if (answered) return
+    const answer = typeof rawAnswer === 'string' ? rawAnswer : ''
+    const correct = normalize(answer) === normalize(ex.answer)
+    setSelected(answer)
+    setAnswered(true)
+    if (correct) setScore(s => s + 1)
+    try {
+      onAnswer({ correct, exercise: ex, userAnswer: answer })
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  const next = () => {
+    if (!safeExercises.length) return
+    setIndex(i => (i + 1) % safeExercises.length)
+    setValue('')
+    setSelected(null)
+    setAnswered(false)
+  }
+
+  const typeLabel = { multiple_choice: '🧪 არჩევანი', fill_blank: '✍️ ჩასვი პასუხი', sentence_builder: '🔀 ააწყვე წინადადება', error_correction: '🛠️ გაასწორე შეცდომა', translation: '🌍 თარგმანი' }[ex.type]
+
+  return <section style={gls({ padding: 18 })}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', color: C.ts, fontSize: 12, marginBottom: 12 }}><span>🧪 {typeLabel}</span><span>{index + 1}/{safeExercises.length} · Score {score}</span></div>
+    <div style={{ height: 7, background: C.card3, borderRadius: 99, overflow: 'hidden', marginBottom: 15 }}><div style={{ width: `${((index + 1) / safeExercises.length) * 100}%`, height: '100%', background: `linear-gradient(90deg,${C.a},${C.g})` }} /></div>
+    <div style={{ background: C.card3, borderRadius: 14, padding: 16 }}>
+      <div style={{ color: C.t, fontSize: 18, fontWeight: 800, lineHeight: 1.6 }}>{ex.question}</div>
+      {ex.type === 'multiple_choice' && <div style={{ display: 'grid', gap: 8, marginTop: 15 }}>{ex.options.map(o => <button key={o} onClick={() => check(o)} style={{ textAlign: 'left', padding: 12, borderRadius: 11, border: `1px solid ${answered && o === ex.answer ? C.g : answered && o === selected ? C.r : C.bdL}`, background: answered && o === ex.answer ? `${C.g}18` : answered && o === selected ? `${C.r}18` : C.card2, color: C.t, fontFamily: 'inherit', cursor: answered ? 'default' : 'pointer' }}>{answered && o === ex.answer ? '✅ ' : answered && o === selected ? '❌ ' : ''}{o}</button>)}</div>}
+      {(ex.type === 'fill_blank' || ex.type === 'error_correction' || ex.type === 'translation') && <div style={{ marginTop: 15 }}><input value={value} onChange={e => setValue(e.target.value)} disabled={answered} placeholder="ჩაწერე პასუხი..." style={{ width: '100%', boxSizing: 'border-box', padding: 12, borderRadius: 11, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }} /><button onClick={() => check(value)} disabled={!value.trim() || answered} style={{ width: '100%', marginTop: 8, border: 'none', borderRadius: 11, padding: 12, background: C.a, color: '#fff', fontWeight: 800 }}>შემოწმება</button></div>}
+      {ex.type === 'sentence_builder' && <div style={{ marginTop: 15 }}><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', minHeight: 42 }}>{(selected ? selected.split(' ') : []).map((x, i) => <span key={i} style={{ padding: '7px 10px', borderRadius: 9, background: C.a, color: '#fff' }}>{x}</span>)}</div><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 10 }}>{ex.tokens.map((token, i) => <button key={`${token}-${i}`} disabled={answered} onClick={() => setSelected(s => s ? `${s} ${token}` : token)} style={{ padding: '8px 10px', borderRadius: 9, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t }}>{token}</button>)}</div><button onClick={() => check(selected || '')} disabled={!selected || answered} style={{ width: '100%', marginTop: 10, border: 'none', borderRadius: 11, padding: 12, background: C.a, color: '#fff', fontWeight: 800 }}>შემოწმება</button></div>}
+    </div>
+    {answered && <div style={{ marginTop: 12, borderLeft: `3px solid ${normalize(selected) === normalize(ex.answer) ? C.g : C.o}`, background: C.card3, borderRadius: 10, padding: 12, color: C.ts, lineHeight: 1.7 }}><strong style={{ color: normalize(selected) === normalize(ex.answer) ? C.g : C.o }}>{normalize(selected) === normalize(ex.answer) ? 'სწორია! 🎉' : `სწორი პასუხი: ${ex.answer}`}</strong><br />{ex.explanation}</div>}
+    {answered && <button onClick={next} style={{ marginTop: 12, width: '100%', border: 'none', borderRadius: 11, padding: 12, background: C.a, color: '#fff', fontWeight: 800 }}>შემდეგი კითხვა →</button>}
+    <div style={{ color: C.ts, fontSize: 12, marginTop: 12 }}>ამ თემის სტატისტიკა: {progress?.correct_count || 0} სწორი · {progress?.wrong_count || 0} შეცდომა</div>
+  </section>
+}
+
+function TopicPage({ lang, category, topic, progress, bookmarked, note, onBack, onBookmark, onNote, onAnswer, onStatus, onOpenTopic, related, C, gls }) {
+  const [draft, setDraft] = useState(note || '')
+  const exercises = getGrammarExercises(lang, topic.title)
+  useEffect(() => setDraft(note || ''), [note])
+  return <div style={{ padding: 16 }}><button onClick={onBack} style={{ border: `1px solid ${C.bdL}`, background: C.card3, color: C.ts, borderRadius: 11, padding: '9px 14px', marginBottom: 14 }}>← უკან</button><section style={gls({ padding: 18, marginBottom: 12 })}><div style={{ display: 'flex', justifyContent: 'space-between' }}><div><div style={{ color: C.ts, fontSize: 12 }}>{LANG[lang]?.flag} {category.cat}</div><h1 style={{ color: C.t, fontSize: 24, margin: '7px 0' }}>{topic.title}</h1><div style={{ color: C.ts }}>{topicSummary(topic)}</div></div><button onClick={onBookmark} style={{ fontSize: 23, border: `1px solid ${bookmarked ? C.gold : C.bdL}`, borderRadius: 12, background: C.card3, color: bookmarked ? C.gold : C.ts }}>{bookmarked ? '★' : '☆'}</button></div><div style={{ marginTop: 15, color: C.ts }}>Mastery <strong style={{ color: C.a }}>{progress?.mastery || 0}%</strong></div><div style={{ height: 8, background: C.card3, borderRadius: 99, marginTop: 6 }}><div style={{ width: `${progress?.mastery || 0}%`, height: '100%', background: C.a, borderRadius: 99 }} /></div><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 12 }}>{Object.entries(STATUS).map(([k, [label, icon]]) => <button key={k} onClick={() => onStatus(k)} style={{ padding: '7px 10px', borderRadius: 99, border: `1px solid ${(progress?.status || 'new') === k ? C.a : C.bdL}`, background: C.card3, color: C.ts }}>{icon} {label}</button>)}</div></section><section style={gls({ padding: 18, marginBottom: 12 })}><h2 style={{ color: C.t, fontSize: 17 }}>📘 სრული ახსნა</h2>{renderBody(topic.body, C)}</section>{topic.ex?.length > 0 && <section style={gls({ padding: 18, marginBottom: 12 })}><h2 style={{ color: C.t, fontSize: 17 }}>📌 მაგალითები</h2>{topic.ex.map((x, i) => <div key={i} style={{ background: C.card3, borderRadius: 10, padding: 11, color: C.t, marginTop: 7 }}>{x}</div>)}</section>}<Practice key={topic.title} exercises={exercises} progress={progress} onAnswer={onAnswer} C={C} gls={gls} /><section style={gls({ padding: 18, marginTop: 12 })}><h2 style={{ color: C.t, fontSize: 17 }}>🧠 ჩემი ჩანაწერი</h2><textarea value={draft} onChange={e => setDraft(e.target.value)} rows={5} placeholder="ჩაწერე შენი წესი..." style={{ width: '100%', boxSizing: 'border-box', background: C.card2, color: C.t, border: `1px solid ${C.bdL}`, borderRadius: 11, padding: 12, fontFamily: 'inherit' }} /><button onClick={() => onNote(draft)} style={{ marginTop: 9, border: 'none', borderRadius: 10, padding: 10, background: C.a, color: '#fff', fontWeight: 800 }}>შენახვა</button></section>{related.length > 0 && <section style={gls({ padding: 18, marginTop: 12 })}><h2 style={{ color: C.t, fontSize: 17 }}>🔁 დაკავშირებული თემები</h2>{related.map(x => <button key={x.title} onClick={() => onOpenTopic ? onOpenTopic(x) : onBack(x)} style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 8, padding: 12, borderRadius: 10, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t }}>{x.title}</button>)}</section>}</div>
+}
+
+export default function GrammarScreen({ lang }) {
+  const { C, gls } = useTheme()
+  const baseCategories = GR[lang] || GR.german || []
+  const categories = lang === 'german' ? [...A1, ...baseCategories] : baseCategories
+  const [userId, setUserId] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState('all')
+  const [selected, setSelected] = useState(null)
+  const [progress, setProgress] = useState({})
+  const [bookmarks, setBookmarks] = useState(new Set())
+  const [notes, setNotes] = useState({})
+  const [due, setDue] = useState([])
+  const [achievements, setAchievements] = useState([])
+  const [challenge, setChallenge] = useState({ target: 5, completed: 0 })
+
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      setLoading(true)
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (!active) return
+      if (authError) setError(authError.message)
+      if (!user) { setLoading(false); return }
+      setUserId(user.id)
+      const [p, b, n, m, a, d] = await Promise.all([
+        supabase.from('grammar_progress').select('*').eq('user_id', user.id).eq('lang', lang),
+        supabase.from('grammar_bookmarks').select('category,topic').eq('user_id', user.id).eq('lang', lang),
+        supabase.from('grammar_notes').select('category,topic,note').eq('user_id', user.id).eq('lang', lang),
+        supabase.from('grammar_mistakes').select('*').eq('user_id', user.id).eq('lang', lang).lte('next_review_at', new Date().toISOString()).order('next_review_at').limit(50),
+        supabase.from('grammar_achievements').select('achievement_id').eq('user_id', user.id),
+        supabase.from('grammar_daily_challenges').select('*').eq('user_id', user.id).eq('challenge_date', new Date().toISOString().slice(0, 10)).maybeSingle(),
+      ])
+      if (!active) return
+      const first = p.error || b.error || n.error
+      if (first) setError(first.message)
+      const pm = {}
+      ;(p.data || []).forEach(r => { pm[keyOf(lang, r.category, r.topic)] = r })
+      const nm = {}
+      ;(n.data || []).forEach(r => { nm[keyOf(lang, r.category, r.topic)] = r.note })
+      setProgress(pm)
+      setBookmarks(new Set((b.data || []).map(r => keyOf(lang, r.category, r.topic))))
+      setNotes(nm)
+      setDue(m.data || [])
+      setAchievements((a.data || []).map(r => r.achievement_id))
+      setChallenge(d.data || { target: 5, completed: 0 })
+      setLoading(false)
+    })()
+    return () => { active = false }
+  }, [lang])
+
+  const allTopics = useMemo(() => categories.flatMap(c => (c.topics || []).map(topic => ({ category: c, topic }))), [categories])
+  const rows = Object.values(progress)
+  const total = rows.reduce((s, r) => s + (r.correct_count || 0) + (r.wrong_count || 0), 0)
+  const correct = rows.reduce((s, r) => s + (r.correct_count || 0), 0)
+  const wrong = rows.reduce((s, r) => s + (r.wrong_count || 0), 0)
+  const mastered = rows.filter(r => r.mastery >= 100 || r.status === 'mastered').length
+  const average = allTopics.length ? Math.round(rows.reduce((s, r) => s + (r.mastery || 0), 0) / allTopics.length) : 0
+  const accuracy = total ? Math.round(correct / total * 100) : 0
+  const seen = rows.filter(r => r.times_viewed > 0).length
+
+  const saveProgress = async (category, topic, patch) => {
+    if (!userId) return
+    const id = keyOf(lang, category.cat, topic.title)
+    const old = progress[id] || {}
+    const isAnswer = patch.answer !== undefined
+    const cc = (old.correct_count || 0) + (patch.answer?.correct ? 1 : 0)
+    const wc = (old.wrong_count || 0) + (isAnswer && !patch.answer.correct ? 1 : 0)
+    const mastery = isAnswer ? Math.max(old.mastery || 0, Math.min(100, Math.round(cc / Math.max(1, cc + wc) * 100))) : (patch.mastery ?? old.mastery ?? 0)
+    const row = { user_id: userId, lang, category: category.cat, topic: topic.title, status: patch.status || (mastery >= 100 ? 'mastered' : mastery >= 50 ? 'review' : old.status || 'learning'), mastery, times_viewed: (old.times_viewed || 0) + (patch.view ? 1 : 0), correct_count: cc, wrong_count: wc, last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+    setProgress(p => ({ ...p, [id]: row }))
+    const { error: e } = await supabase.from('grammar_progress').upsert(row, { onConflict: 'user_id,lang,category,topic' })
+    if (e) setError(e.message)
+    if (isAnswer) {
+      const ex = patch.answer.exercise
+      if (!patch.answer.correct) {
+        const mistake = { user_id: userId, lang, category: category.cat, topic: topic.title, exercise_id: ex.id, exercise_type: ex.type, question: ex.question, user_answer: patch.answer.userAnswer, correct_answer: ex.answer, explanation: ex.explanation, mistake_count: 1, review_count: 0, next_review_at: getNextReviewDate(1), last_answered_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+        const { error: me } = await supabase.from('grammar_mistakes').upsert(mistake, { onConflict: 'user_id,lang,topic,exercise_id' })
+        if (me) setError(me.message)
+      }
+      const today = new Date().toISOString().slice(0, 10)
+      const nextChallenge = Math.min(challenge.target, (challenge.completed || 0) + 1)
+      setChallenge(c => ({ ...c, completed: nextChallenge }))
+      await supabase.from('grammar_daily_challenges').upsert({ user_id: userId, challenge_date: today, target: challenge.target || 5, completed: nextChallenge, xp: nextChallenge * 10, completed_at: nextChallenge >= (challenge.target || 5) ? new Date().toISOString() : null }, { onConflict: 'user_id,challenge_date' })
+      const stats = { seen, correct: cc, total: cc + wc, accuracy: cc + wc ? Math.round(cc / (cc + wc) * 100) : 0, mastered }
+      for (const [aid, , test] of ACHIEVEMENTS) if (test(stats) && !achievements.includes(aid)) {
+        await supabase.from('grammar_achievements').upsert({ user_id: userId, achievement_id: aid }, { onConflict: 'user_id,achievement_id' })
+        setAchievements(a => [...a, aid])
+      }
+    }
+  }
+
+  const saveNote = async (category, topic, note) => {
+    if (!userId) return
+    const id = keyOf(lang, category.cat, topic.title)
+    const clean = note.trim()
+    setNotes(n => ({ ...n, [id]: clean }))
+    const result = clean ? await supabase.from('grammar_notes').upsert({ user_id: userId, lang, category: category.cat, topic: topic.title, note: clean, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lang,category,topic' }) : await supabase.from('grammar_notes').delete().match({ user_id: userId, lang, category: category.cat, topic: topic.title })
+    if (result.error) setError(result.error.message)
+  }
+
+  const toggleBookmark = async (category, topic) => {
+    if (!userId) return
+    const id = keyOf(lang, category.cat, topic.title)
+    const exists = bookmarks.has(id)
+    setBookmarks(s => { const n = new Set(s); exists ? n.delete(id) : n.add(id); return n })
+    const r = exists ? await supabase.from('grammar_bookmarks').delete().match({ user_id: userId, lang, category: category.cat, topic: topic.title }) : await supabase.from('grammar_bookmarks').insert({ user_id: userId, lang, category: category.cat, topic: topic.title })
+    if (r.error) setError(r.error.message)
+  }
+
+  const openTopic = (category, topic) => {
+    setSelected({ category, topic })
+  }
+
+  const visible = categories.map(c => ({ ...c, topics: (c.topics || []).filter(t => {
+    const id = keyOf(lang, c.cat, t.title)
+    const row = progress[id]
+    const q = normalize(query)
+    const hay = normalize(`${c.cat} ${t.title} ${t.body} ${(t.ex || []).join(' ')}`)
+    return (!q || hay.includes(q)) && (filter === 'all' || (filter === 'bookmarks' && bookmarks.has(id)) || (filter === 'mastered' && row?.mastery >= 100) || (filter === 'learning' && row?.status && row.status !== 'new'))
+  }) })).filter(c => c.topics.length)
+
+  if (loading) return <div style={{ padding: 20, color: C.ts }}>გრამატიკის მონაცემები იტვირთება...</div>
+  if (!userId) return <div style={{ padding: 20, color: C.ts }}>🔐 ავტორიზაცია საჭიროა.</div>
+
+  if (selected) {
+    const { category, topic } = selected
+    const id = keyOf(lang, category.cat, topic.title)
+    return <TopicPage lang={lang} category={category} topic={topic} progress={progress[id]} bookmarked={bookmarks.has(id)} note={notes[id] || ''} onBack={() => setSelected(null)} onOpenTopic={topic2 => openTopic(category, topic2)} onBookmark={() => toggleBookmark(category, topic)} onNote={n => saveNote(category, topic, n)} onAnswer={a => saveProgress(category, topic, { answer: a })} onStatus={s => saveProgress(category, topic, { status: s })} related={(category.topics || []).filter(x => x.title !== topic.title).slice(0, 5)} C={C} gls={gls} />
+  }
+
+  return <div style={{ padding: 16 }}><div style={{ marginBottom: 18 }}><div style={{ color: C.t, fontWeight: 900, fontSize: 25 }}>📖 გრამატიკა 3.0</div><div style={{ color: C.ts, fontSize: 13 }}>{LANG[lang]?.flag} {LANG[lang]?.name} · Learn → Practice → Mistakes → SRS → Mastery</div></div>{error && <div style={{ marginBottom: 12, padding: 12, borderRadius: 12, background: `${C.r}14`, border: `1px solid ${C.r}55`, color: C.r, lineHeight: 1.6 }}>⚠️ Backend შეცდომა: {error}<br /><small>თუ ეს არის RLS ან relation შეცდომა, გაუშვი <b>supabase/migrations/grammar_3_0.sql</b> Supabase SQL Editor-ში. სრული schema.sql თავიდან არ გაუშვა.</small></div>}<div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10, marginBottom: 12 }}><Stat icon="📚" label="თემები" value={allTopics.length} C={C} gls={gls} /><Stat icon="📈" label="საშუალო mastery" value={`${average}%`} C={C} gls={gls} /><Stat icon="🏆" label="ათვისებული" value={mastered} C={C} gls={gls} /><Stat icon="🎯" label="სიზუსტე" value={`${accuracy}%`} C={C} gls={gls} /></div><section style={gls({ padding: 14, marginBottom: 12 })}><div style={{ display: 'flex', justifyContent: 'space-between', color: C.ts }}><span>📅 დღევანდელი Challenge</span><strong style={{ color: C.a }}>{challenge.completed || 0}/{challenge.target || 5}</strong></div><div style={{ height: 8, background: C.card3, borderRadius: 99, marginTop: 8 }}><div style={{ width: `${Math.min(100, ((challenge.completed || 0) / (challenge.target || 5)) * 100)}%`, height: '100%', background: C.g, borderRadius: 99 }} /></div><div style={{ color: C.ts, fontSize: 12, marginTop: 7 }}>+{(challenge.completed || 0) * 10} XP · {due.length} SRS review due</div></section><section style={gls({ padding: 14, marginBottom: 12 })}><input value={query} onChange={e => setQuery(e.target.value)} placeholder="🔎 მოძებნე გრამატიკული თემა..." style={{ width: '100%', boxSizing: 'border-box', padding: 13, borderRadius: 12, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }} /><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>{[['all', 'ყველა'], ['learning', 'ვწავლობ'], ['mastered', 'ათვისებული'], ['bookmarks', 'რჩეულები']].map(([k, l]) => <button key={k} onClick={() => setFilter(k)} style={{ borderRadius: 99, padding: '8px 12px', border: `1px solid ${filter === k ? C.a : C.bdL}`, background: filter === k ? `${C.a}18` : C.card3, color: filter === k ? C.a : C.ts }}>{l}</button>)}</div></section><div style={{ color: C.ts, fontSize: 12, marginBottom: 10 }}>📖 {seen} ნანახი · ✅ {correct} სწორი · ❌ {wrong} შეცდომა · 🏅 {achievements.length} achievement</div>{visible.map(c => <section key={c.cat} style={gls({ padding: 14, marginBottom: 12 })}><h2 style={{ color: C.t, fontSize: 18, margin: '0 0 10px' }}>{c.icon} {c.cat}</h2>{c.topics.map(t => { const id = keyOf(lang, c.cat, t.title); const row = progress[id]; return <button key={t.title} onClick={() => openTopic(c, t)} style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 8, padding: 14, borderRadius: 12, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong>{t.title}</strong><span style={{ color: C.a }}>{row?.mastery || 0}%</span></div><div style={{ color: C.ts, fontSize: 12, marginTop: 5 }}>{topicSummary(t)}</div></button> })}</section>)}</div>
+}
