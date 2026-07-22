@@ -1,5 +1,33 @@
 import A1_EXERCISES from './grammarA1Exercises.js'
 
+function sanitizeExercise(exercise) {
+  if (!exercise || typeof exercise !== 'object') return null
+
+  const type = typeof exercise.type === 'string' ? exercise.type : 'multiple_choice'
+  const question = typeof exercise.question === 'string' ? exercise.question : ''
+  const answer = typeof exercise.answer === 'string' ? exercise.answer : ''
+  const explanation = typeof exercise.explanation === 'string' ? exercise.explanation : ''
+
+  if (type === 'multiple_choice') {
+    const inputOptions = Array.isArray(exercise.options) ? exercise.options : []
+    const options = [...new Set([answer, ...inputOptions].filter(o => typeof o === 'string' && o.trim()))]
+    while (options.length < 3) {
+      options.push(`ვარიანტი ${options.length + 1}`)
+    }
+    return { ...exercise, type, question, answer, explanation, options: options.slice(0, 4) }
+  }
+
+  if (type === 'sentence_builder') {
+    const inputTokens = Array.isArray(exercise.tokens) ? exercise.tokens : []
+    const tokens = inputTokens.length > 0
+      ? inputTokens.filter(t => typeof t === 'string' && t.trim())
+      : answer.split(/\s+/).filter(Boolean)
+    return { ...exercise, type, question, answer, explanation, tokens }
+  }
+
+  return { ...exercise, type, question, answer, explanation }
+}
+
 const EXERCISES = {
   german: {
     ...A1_EXERCISES,
@@ -28,7 +56,8 @@ const EXERCISES = {
 }
 
 export function getGrammarExercises(lang, topicTitle) {
-  return EXERCISES[lang]?.[topicTitle] || []
+  const raw = EXERCISES[lang]?.[topicTitle] || []
+  return raw.map(sanitizeExercise).filter(Boolean)
 }
 
 export default EXERCISES
