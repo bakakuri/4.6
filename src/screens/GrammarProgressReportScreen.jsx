@@ -24,8 +24,7 @@ function scoreTopic(item) {
   const mastery = item.mastery || 0
   const mistakePenalty = Math.min(25, (item.repeatedMistakeCount || 0) * 4)
   const duePenalty = item.due ? 10 : 0
-  const readiness = Math.max(0, Math.min(100, Math.round(mastery - mistakePenalty - duePenalty + (item.status === 'mastered' ? 10 : 0))))
-  return readiness
+  return Math.max(0, Math.min(100, Math.round(mastery - mistakePenalty - duePenalty + (item.status === 'mastered' ? 10 : 0))))
 }
 
 export default function GrammarProgressReportScreen({ lang, analytics, onBack, onOpenRoadmap, onOpenDiagnostics, onOpenTopic }) {
@@ -43,21 +42,16 @@ export default function GrammarProgressReportScreen({ lang, analytics, onBack, o
   }, [learningState.nextToLearn, weakTop])
 
   const masteryBuckets = useMemo(() => groupByLevel(learningState.allTopics || []), [learningState.allTopics])
-  const mastered = learningState.knows.length
-  const weakCount = learningState.doesNotKnow.length
-  const pendingCount = learningState.nextToLearn.length
-
   const qaChecks = useMemo(() => {
-    const checks = [
+    return [
       { label: 'Topics loaded', ok: (learningState.allTopics || []).length > 0 },
       { label: 'Next lesson available', ok: Boolean(nextLesson) },
-      { label: 'Weak topics tracked', ok: weakCount >= 0 },
+      { label: 'Weak topics tracked', ok: weakTop.length >= 0 },
       { label: 'Due queue tracked', ok: (data.dueCount || 0) >= 0 },
       { label: 'Session history available', ok: Array.isArray(data.sessions) },
       { label: 'Mistake history available', ok: Array.isArray(data.mistakes) },
     ]
-    return checks
-  }, [learningState.allTopics, nextLesson, weakCount, data.dueCount, data.sessions, data.mistakes])
+  }, [learningState.allTopics, nextLesson, weakTop.length, data.dueCount, data.sessions, data.mistakes])
 
   const report = useMemo(() => {
     const level = data.averageMastery >= 85 ? 'A2/B1 zone' : data.averageMastery >= 65 ? 'A1/A2 zone' : 'foundation mode'
@@ -134,7 +128,7 @@ export default function GrammarProgressReportScreen({ lang, analytics, onBack, o
                 <span style={{ color: C.ts }}>{group.items.length} topics</span>
               </div>
               <div style={{ height: 8, borderRadius: 99, overflow: 'hidden', background: C.card3, marginTop: 8 }}>
-                <div style={{ height: '100%', width: `${Math.round(group.items.filter(item => item.mastery >= 80).length / group.items.length * 100)}%`, background: C.a }} />
+                <div style={{ height: '100%', width: `${Math.round((group.items.filter(item => item.mastery >= 80).length / group.items.length) * 100)}%`, background: C.a }} />
               </div>
               <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
                 {group.items.slice(0, 4).map(item => <GrammarTopicCard key={item.key} title={item.topic} subtitle={item.summary} mastery={item.mastery} onClick={() => onOpenTopic?.(item.category, item.topic)} C={C} compact />)}
@@ -185,7 +179,7 @@ export default function GrammarProgressReportScreen({ lang, analytics, onBack, o
       </section>
 
       <section style={gls({ padding: 16 })}>
-        <div style={{ display: grid, gap: 8 }}>
+        <div style={{ display: 'grid', gap: 8 }}>
           <button onClick={onOpenRoadmap} style={{ border: 'none', borderRadius: 12, padding: 13, background: C.a, color: '#fff', fontWeight: 800, fontFamily: 'inherit' }}>🧭 Open learning path</button>
           <button onClick={onOpenDiagnostics} style={{ border: `1px solid ${C.bdL}`, borderRadius: 12, padding: 13, background: C.card2, color: C.t, fontFamily: 'inherit' }}>🧭 Run new diagnostic</button>
         </div>
