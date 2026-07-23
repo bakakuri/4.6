@@ -42,16 +42,20 @@ export default function GrammarProgressReportScreen({ lang, analytics, onBack, o
   }, [learningState.nextToLearn, weakTop])
 
   const masteryBuckets = useMemo(() => groupByLevel(learningState.allTopics || []), [learningState.allTopics])
+  const masteredCount = learningState.knows.length
+  const weakCount = learningState.doesNotKnow.length
+  const pendingCount = learningState.nextToLearn.length
+
   const qaChecks = useMemo(() => {
     return [
       { label: 'Topics loaded', ok: (learningState.allTopics || []).length > 0 },
       { label: 'Next lesson available', ok: Boolean(nextLesson) },
-      { label: 'Weak topics tracked', ok: weakTop.length >= 0 },
+      { label: 'Weak topics tracked', ok: weakCount >= 0 },
       { label: 'Due queue tracked', ok: (data.dueCount || 0) >= 0 },
       { label: 'Session history available', ok: Array.isArray(data.sessions) },
       { label: 'Mistake history available', ok: Array.isArray(data.mistakes) },
     ]
-  }, [learningState.allTopics, nextLesson, weakTop.length, data.dueCount, data.sessions, data.mistakes])
+  }, [learningState.allTopics, nextLesson, weakCount, data.dueCount, data.sessions, data.mistakes])
 
   const report = useMemo(() => {
     const level = data.averageMastery >= 85 ? 'A2/B1 zone' : data.averageMastery >= 65 ? 'A1/A2 zone' : 'foundation mode'
@@ -74,12 +78,15 @@ export default function GrammarProgressReportScreen({ lang, analytics, onBack, o
         <GrammarMetricCard icon="🎯" label="Accuracy" value={`${data.accuracy || 0}%`} C={C} gls={gls} />
         <GrammarMetricCard icon="🕘" label="7 day sessions" value={recent7} C={C} gls={gls} />
         <GrammarMetricCard icon="🗓️" label="14 day sessions" value={recent14} C={C} gls={gls} />
+        <GrammarMetricCard icon="✅" label="Known topics" value={masteredCount} C={C} gls={gls} />
+        <GrammarMetricCard icon="🔴" label="Needs work" value={weakCount} C={C} gls={gls} />
       </div>
 
       <section style={gls({ padding: 16, marginBottom: 12 })}>
         <h2 style={{ color: C.t, fontSize: 18, margin: '0 0 10px' }}>📝 Summary</h2>
         <div style={{ color: C.ts, lineHeight: 1.8 }}>{report.headline}</div>
         <div style={{ color: C.ts, lineHeight: 1.8, marginTop: 6 }}>{report.recommendation}</div>
+        <div style={{ color: C.ts, fontSize: 12, marginTop: 8 }}>Next focus queue: {pendingCount} topics</div>
       </section>
 
       <section style={gls({ padding: 16, marginBottom: 12 })}>
