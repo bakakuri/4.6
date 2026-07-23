@@ -4,11 +4,14 @@ import { useTheme } from '../lib/ThemeContext.jsx'
 import GrammarMetricCard from '../components/grammar/GrammarMetricCard.jsx'
 import { runGrammarQualityChecks } from '../data/grammarPlanning.js'
 
-export default function GrammarQualityScreen({ lang, categories, onBack, onOpenTopic, onOpenRoadmap }) {
+export default function GrammarQualityScreen({ lang, categories = [], onBack, onOpenTopic, onOpenRoadmap }) {
   const { C, gls } = useTheme()
-  const quality = useMemo(() => runGrammarQualityChecks({ categories, lang }), [categories, lang])
+  const safeCategories = Array.isArray(categories) ? categories : []
+  const quality = useMemo(() => runGrammarQualityChecks({ categories: safeCategories, lang }), [safeCategories, lang])
   const errorCount = quality.issues.filter(item => item.severity === 'error').length
   const warnCount = quality.issues.filter(item => item.severity === 'warn').length
+  const firstCategory = safeCategories[0]
+  const firstTopic = firstCategory?.topics?.[0]
 
   return (
     <div style={{ padding: 16 }}>
@@ -54,7 +57,7 @@ export default function GrammarQualityScreen({ lang, categories, onBack, onOpenT
       <section style={gls({ padding: 16 })}>
         <div style={{ display: 'grid', gap: 8 }}>
           <button onClick={onOpenRoadmap} style={{ border: 'none', borderRadius: 12, padding: 13, background: C.a, color: '#fff', fontWeight: 800, fontFamily: 'inherit' }}>🗺️ Open curriculum</button>
-          <button onClick={onOpenTopic ? () => onOpenTopic(categories[0]?.cat, categories[0]?.topics?.[0]?.title) : undefined} style={{ border: `1px solid ${C.bdL}`, borderRadius: 12, padding: 13, background: C.card2, color: C.t, fontFamily: 'inherit' }}>📘 Open first topic</button>
+          <button onClick={firstTopic ? () => onOpenTopic?.(firstCategory.cat, firstTopic.title) : undefined} style={{ border: `1px solid ${C.bdL}`, borderRadius: 12, padding: 13, background: C.card2, color: C.t, fontFamily: 'inherit' }}>📘 Open first topic</button>
         </div>
       </section>
     </div>
