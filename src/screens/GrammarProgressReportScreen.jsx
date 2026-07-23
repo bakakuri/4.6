@@ -2,19 +2,23 @@ import { useMemo } from 'react'
 import { LANG } from '../theme.js'
 import { useTheme } from '../lib/ThemeContext.jsx'
 import GrammarMetricCard from '../components/grammar/GrammarMetricCard.jsx'
+import GrammarTopicCard from '../components/grammar/GrammarTopicCard.jsx'
+import { buildLearningState } from '../data/grammarInsights.js'
 
 function calcRecentCount(sessions = [], days = 7) {
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
   return sessions.filter(session => new Date(session.completed_at || session.started_at || 0).getTime() >= cutoff).length
 }
 
-export default function GrammarProgressReportScreen({ lang, analytics, onBack, onOpenRoadmap, onOpenDiagnostics }) {
+export default function GrammarProgressReportScreen({ lang, analytics, categories, progress, due, mistakes, onBack, onOpenRoadmap, onOpenDiagnostics, onOpenTopic }) {
   const { C, gls } = useTheme()
   const data = analytics || {}
   const recent7 = calcRecentCount(data.sessions || [], 7)
   const recent14 = calcRecentCount(data.sessions || [], 14)
   const weakTop = (data.weakTopics || []).slice(0, 5)
   const strongTop = (data.strongTopics || []).slice(0, 5)
+
+  const learningState = useMemo(() => buildLearningState({ categories, progress, due, mistakes, lang }), [categories, progress, due, mistakes, lang])
 
   const report = useMemo(() => {
     const level = data.averageMastery >= 85 ? 'A2/B1 zone' : data.averageMastery >= 65 ? 'A1/A2 zone' : 'foundation mode'
@@ -43,6 +47,27 @@ export default function GrammarProgressReportScreen({ lang, analytics, onBack, o
         <h2 style={{ color: C.t, fontSize: 18, margin: '0 0 10px' }}>📝 Summary</h2>
         <div style={{ color: C.ts, lineHeight: 1.8 }}>{report.headline}</div>
         <div style={{ color: C.ts, lineHeight: 1.8, marginTop: 6 }}>{report.recommendation}</div>
+      </section>
+
+      <section style={gls({ padding: 16, marginBottom: 12 })}>
+        <h2 style={{ color: C.t, fontSize: 18, margin: '0 0 10px' }}>🟢 You know</h2>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {learningState.knows.length === 0 ? <div style={{ color: C.ts }}>ჯერ ძლიერი თემები არ ჩანს.</div> : learningState.knows.map(item => <GrammarTopicCard key={item.key} title={item.topic} subtitle={`${item.summary}${item.errorPattern ? ` · ${item.errorPattern}` : ''}`} mastery={item.mastery} onClick={() => onOpenTopic?.(item.category, item.topic)} C={C} compact />)}
+        </div>
+      </section>
+
+      <section style={gls({ padding: 16, marginBottom: 12 })}>
+        <h2 style={{ color: C.t, fontSize: 18, margin: '0 0 10px' }}>🔴 You do not know yet</h2>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {learningState.doesNotKnow.length === 0 ? <div style={{ color: C.ts }}>Nothing critical yet.</div> : learningState.doesNotKnow.map(item => <GrammarTopicCard key={item.key} title={item.topic} subtitle={`${item.summary}${item.errorPattern ? ` · ${item.errorPattern}` : ''}`} mastery={item.mastery} onClick={() => onOpenTopic?.(item.category, item.topic)} C={C} compact />)}
+        </div>
+      </section>
+
+      <section style={gls({ padding: 16, marginBottom: 12 })}>
+        <h2 style={{ color: C.t, fontSize: 18, margin: '0 0 10px' }}>🎯 Next to learn</h2>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {learningState.nextToLearn.length === 0 ? <div style={{ color: C.ts }}>No next topic yet.</div> : learningState.nextToLearn.map(item => <GrammarTopicCard key={item.key} title={item.topic} subtitle={`${item.summary}${item.due ? ' · due now' : ''}`} mastery={item.mastery} onClick={() => onOpenTopic?.(item.category, item.topic)} C={C} compact />)}
+        </div>
       </section>
 
       <section style={gls({ padding: 16, marginBottom: 12 })}>
