@@ -83,24 +83,16 @@ export default function GrammarTopicPanel({ lang, category, topic, progress, boo
 
       <GrammarErrorBoundary C={C}>
         <section style={gls({ padding: 18 })}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, color: C.ts, fontSize: 12, marginBottom: 12 }}>
-            <span>🧪 Exercise</span>
-            <span>{index + 1}/{Math.max(exercises.length, 1)} · Score {score}</span>
-          </div>
-
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, color: C.ts, fontSize: 12, marginBottom: 12 }}><span>🧪 Exercise</span><span>{index + 1}/{Math.max(exercises.length, 1)} · Score {score}</span></div>
           {!current ? <div style={{ color: C.ts }}>ამ თემისთვის სავარჯიშოები ჯერ არ არის დამატებული.</div> : <>
             <div style={{ color: C.t, fontSize: 18, fontWeight: 800, lineHeight: 1.6 }}>{current.question}</div>
-
             {current.type === 'multiple_choice' && <div style={{ display: 'grid', gap: 8, marginTop: 15 }}>{(current.options || []).map(option => {
               const selected = answered && choice === option
-              const correct = answered && isGrammarAnswerCorrect(option, { ...current, answer: current.answer }) && option === current.answer
+              const correct = answered && option === current.answer
               return <button key={option} onClick={() => { setChoice(option); submit(option) }} style={{ textAlign: 'left', padding: 12, borderRadius: 11, border: `1px solid ${correct ? C.g : selected ? C.r : C.bdL}`, background: correct ? `${C.g}18` : selected ? `${C.r}18` : C.card2, color: C.t, fontFamily: 'inherit' }}>{correct ? '✅ ' : selected ? '❌ ' : ''}{option}</button>
             })}</div>}
-
             {(current.type === 'fill_blank' || current.type === 'error_correction' || current.type === 'translation') && <div style={{ marginTop: 15 }}><input value={input} onChange={e => setInput(e.target.value)} disabled={answered} placeholder="ჩაწერე პასუხი..." style={{ width: '100%', boxSizing: 'border-box', padding: 12, borderRadius: 11, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }} /><button onClick={() => submit(input)} disabled={!input.trim() || answered} style={{ width: '100%', marginTop: 8, border: 'none', borderRadius: 11, padding: 12, background: C.a, color: '#fff', fontWeight: 800 }}>შემოწმება</button></div>}
-
             {current.type === 'sentence_builder' && <div style={{ marginTop: 15 }}><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', minHeight: 42, marginBottom: 10 }}>{tokens.length === 0 ? <div style={{ color: C.ts, fontSize: 13 }}>სიტყვებზე დააჭირე სწორი წინადადების ასაწყობად.</div> : tokens.map((token, i) => <button key={`${token}-${i}`} disabled={answered} onClick={() => toggle(token)} style={{ padding: '7px 10px', borderRadius: 9, background: C.a, color: '#fff', border: 'none', fontFamily: 'inherit' }}>{token}</button>)}</div><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>{(current.tokens || current.answer.split(/\s+/)).map((token, i) => <button key={`${token}-${i}`} disabled={answered} onClick={() => toggle(token)} style={{ padding: '8px 10px', borderRadius: 9, border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }}>{token}</button>)}</div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}><button onClick={() => setTokens(prev => prev.slice(0, -1))} disabled={answered || tokens.length === 0} style={{ border: `1px solid ${C.bdL}`, borderRadius: 11, padding: 11, background: C.card2, color: C.t, fontFamily: 'inherit' }}>↶ Undo</button><button onClick={() => setTokens([])} disabled={answered || tokens.length === 0} style={{ border: `1px solid ${C.bdL}`, borderRadius: 11, padding: 11, background: C.card2, color: C.t, fontFamily: 'inherit' }}>↺ Reset</button></div><button onClick={() => submit(tokens.join(' '))} disabled={tokens.length === 0 || answered} style={{ width: '100%', marginTop: 10, border: 'none', borderRadius: 11, padding: 12, background: C.a, color: '#fff', fontWeight: 800 }}>შემოწმება</button></div>}
-
             {answered && <div style={{ marginTop: 12, borderLeft: `3px solid ${isGrammarAnswerCorrect(exerciseAnswer, current) ? C.g : C.o}`, background: C.card3, borderRadius: 10, padding: 12, color: C.ts, lineHeight: 1.7 }}><strong style={{ color: isGrammarAnswerCorrect(exerciseAnswer, current) ? C.g : C.o }}>{isGrammarAnswerCorrect(exerciseAnswer, current) ? 'სწორია! 🎉' : `სწორი პასუხი: ${current.answer}`}</strong><br />{current.explanation}</div>}
             {answered && <button onClick={next} style={{ marginTop: 12, width: '100%', border: 'none', borderRadius: 11, padding: 12, background: C.a, color: '#fff', fontWeight: 800 }}>შემდეგი კითხვა →</button>}
           </>}
@@ -113,7 +105,7 @@ export default function GrammarTopicPanel({ lang, category, topic, progress, boo
         <button onClick={() => onSaveNote(draft)} style={{ marginTop: 9, border: 'none', borderRadius: 10, padding: 10, background: C.a, color: '#fff', fontWeight: 800, fontFamily: 'inherit' }}>შენახვა</button>
       </section>
 
-      {related.length > 0 && <section style={gls({ padding: 18, marginTop: 12 })}><h2 style={{ color: C.t, fontSize: 17, margin: '0 0 10px' }}>🔁 დაკავშირებული თემები</h2><div style={{ display: 'grid', gap: 8 }}>{related.map(item => <GrammarTopicCard key={item.title} title={item.title} subtitle={item.body ? item.body.split('\n').find(Boolean) : ''} mastery={progress?.mastery || 0} onClick={() => onOpenTopic(item)} C={C} compact />)}</div></section>}
+      {related.length > 0 && <section style={gls({ padding: 18, marginTop: 12 })}><h2 style={{ color: C.t, fontSize: 17, margin: '0 0 10px' }}>🔁 დაკავშირებული თემები</h2><div style={{ display: 'grid', gap: 8 }}>{related.map(item => <GrammarTopicCard key={item.title} title={item.title} subtitle={item.body ? item.body.split('\n').find(Boolean) : ''} mastery={progress?.mastery || 0} onClick={() => onOpenTopic(category, item.title)} C={C} compact />)}</div></section>}
     </div>
   )
 }
