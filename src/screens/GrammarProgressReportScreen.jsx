@@ -65,6 +65,11 @@ export default function GrammarProgressReportScreen({ lang, analytics, onBack, o
     }
   }, [data.averageMastery, weakTop])
 
+  const nextLessonTitle = nextLesson?.category && nextLesson?.title ? `${nextLesson.category} · ${nextLesson.title}` : 'No lesson available yet.'
+  const nextLessonReason = nextLesson?.reason || 'Focus on the weakest topic first.'
+  const nextLessonMode = nextLesson?.practiceMode || 'practice'
+  const nextLessonLevel = nextLesson?.level || 'n/a'
+
   return (
     <div style={{ padding: 16 }}>
       <button onClick={onBack} style={{ border: `1px solid ${C.bdL}`, background: C.card3, color: C.ts, borderRadius: 11, padding: '9px 13px', fontFamily: 'inherit' }}>← უკან</button>
@@ -94,9 +99,9 @@ export default function GrammarProgressReportScreen({ lang, analytics, onBack, o
         {nextLesson ? (
           <div style={{ background: C.card2, borderRadius: 12, padding: 14 }}>
             <div style={{ color: C.ts, fontSize: 12 }}>Why this next?</div>
-            <div style={{ color: C.t, fontWeight: 900, fontSize: 20, marginTop: 6 }}>{nextLesson.category} · {nextLesson.title}</div>
-            <div style={{ color: C.ts, lineHeight: 1.7, marginTop: 6 }}>{nextLesson.reason}</div>
-            <div style={{ color: C.ts, fontSize: 12, marginTop: 6 }}>Mode: {nextLesson.practiceMode} · Level: {nextLesson.level} · Readiness: {scoreTopic(nextLesson)}%</div>
+            <div style={{ color: C.t, fontWeight: 900, fontSize: 20, marginTop: 6 }}>{nextLessonTitle}</div>
+            <div style={{ color: C.ts, lineHeight: 1.7, marginTop: 6 }}>{nextLessonReason}</div>
+            <div style={{ color: C.ts, fontSize: 12, marginTop: 6 }}>Mode: {nextLessonMode} · Level: {nextLessonLevel} · Readiness: {scoreTopic(nextLesson)}%</div>
             <button onClick={() => onOpenTopic?.(nextLesson.category, nextLesson.topic || nextLesson.title)} style={{ marginTop: 12, border: 'none', borderRadius: 11, padding: '11px 14px', background: C.a, color: '#fff', fontWeight: 800, fontFamily: 'inherit' }}>
               Continue learning
             </button>
@@ -149,7 +154,7 @@ export default function GrammarProgressReportScreen({ lang, analytics, onBack, o
         <h2 style={{ color: C.t, fontSize: 18, margin: '0 0 10px' }}>🧠 Adaptive practice</h2>
         <div style={{ display: 'grid', gap: 8 }}>
           <div style={{ background: C.card2, borderRadius: 12, padding: 12, color: C.ts, lineHeight: 1.7 }}>
-            Today's mode: <strong style={{ color: C.t }}>{nextLesson?.practiceMode || 'new'}</strong>
+            Today's mode: <strong style={{ color: C.t }}>{nextLessonMode}</strong>
             <br />
             Recommended focus: <strong style={{ color: C.t }}>{nextLesson?.topic || 'n/a'}</strong>
           </div>
