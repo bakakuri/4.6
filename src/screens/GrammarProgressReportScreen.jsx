@@ -3,22 +3,20 @@ import { LANG } from '../theme.js'
 import { useTheme } from '../lib/ThemeContext.jsx'
 import GrammarMetricCard from '../components/grammar/GrammarMetricCard.jsx'
 import GrammarTopicCard from '../components/grammar/GrammarTopicCard.jsx'
-import { buildLearningState } from '../data/grammarInsights.js'
 
 function calcRecentCount(sessions = [], days = 7) {
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
   return sessions.filter(session => new Date(session.completed_at || session.started_at || 0).getTime() >= cutoff).length
 }
 
-export default function GrammarProgressReportScreen({ lang, analytics, categories, progress, due, mistakes, onBack, onOpenRoadmap, onOpenDiagnostics, onOpenTopic }) {
+export default function GrammarProgressReportScreen({ lang, analytics, onBack, onOpenRoadmap, onOpenDiagnostics, onOpenTopic }) {
   const { C, gls } = useTheme()
   const data = analytics || {}
   const recent7 = calcRecentCount(data.sessions || [], 7)
   const recent14 = calcRecentCount(data.sessions || [], 14)
   const weakTop = (data.weakTopics || []).slice(0, 5)
   const strongTop = (data.strongTopics || []).slice(0, 5)
-
-  const learningState = useMemo(() => buildLearningState({ categories, progress, due, mistakes, lang }), [categories, progress, due, mistakes, lang])
+  const learningState = data.learningState || { knows: [], doesNotKnow: [], nextToLearn: [] }
 
   const report = useMemo(() => {
     const level = data.averageMastery >= 85 ? 'A2/B1 zone' : data.averageMastery >= 65 ? 'A1/A2 zone' : 'foundation mode'
