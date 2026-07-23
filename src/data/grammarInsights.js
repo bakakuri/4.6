@@ -39,11 +39,6 @@ function summarizeMistakes(mistakes = []) {
 
 export function buildLearningState({ categories = [], progress = {}, due = [], mistakes = [], lang = 'german' }) {
   const allTopics = categories.flatMap(category => (category.topics || []).map(topic => ({ category, topic })))
-  const rows = Object.entries(progress).map(([key, row]) => {
-    const [rowLang, category, topic] = key.split('::')
-    return { key, rowLang, category, topic, mastery: row.mastery || 0, status: row.status || 'new', row }
-  }).filter(item => item.rowLang === lang)
-
   const dueSet = new Set((due || []).map(item => topicKey(lang, item.category, item.topic)))
   const mistakeMap = new Map()
   for (const item of mistakes || []) {
@@ -174,6 +169,7 @@ export function buildGrammarAnalytics({ categories = [], progress = {}, due = []
     masteryBuckets,
     sessions,
     mistakes,
+    learningState: buildLearningState({ categories, progress, due, mistakes, lang }),
   }
 }
 
