@@ -1,4 +1,5 @@
 import A1_EXERCISES from './grammarA1Exercises.js'
+import EXTRA_A1_EXERCISES from './grammarA1Extras.js'
 
 function sanitizeExercise(exercise) {
   if (!exercise || typeof exercise !== 'object') return null
@@ -28,9 +29,19 @@ function sanitizeExercise(exercise) {
   return { ...exercise, type, question, answer, explanation }
 }
 
+function mergeTopicBanks(base = {}, extra = {}) {
+  const merged = { ...base }
+  for (const [topicTitle, exercises] of Object.entries(extra)) {
+    merged[topicTitle] = [...(merged[topicTitle] || []), ...(Array.isArray(exercises) ? exercises : [])]
+  }
+  return merged
+}
+
+const A1_BANK = mergeTopicBanks(A1_EXERCISES, EXTRA_A1_EXERCISES)
+
 const EXERCISES = {
   german: {
-    ...A1_EXERCISES,
+    ...A1_BANK,
     'Der, Die, Das — სქესი': [
       { id: 'gender-1', type: 'multiple_choice', question: '___ Mann ist groß.', options: ['Der', 'Die', 'Das'], answer: 'Der', explanation: 'Mann არის მამრობითი სქესის სიტყვა: der Mann.' },
       { id: 'gender-2', type: 'fill_blank', question: '___ Katze schläft.', answer: 'Die', explanation: 'Katze არის მდედრობითი სქესის სიტყვა: die Katze.' },
