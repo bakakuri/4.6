@@ -17,6 +17,7 @@ import GrammarMistakesScreen from './GrammarMistakesScreen.jsx'
 import GrammarRoadmapScreen from './GrammarRoadmapScreen.jsx'
 import GrammarPracticeModesScreen from './GrammarPracticeModesScreen.jsx'
 import GrammarProgressReportScreen from './GrammarProgressReportScreen.jsx'
+import GrammarAdvancedHub from './GrammarAdvancedHub.jsx'
 import { buildGrammarAnalytics, buildGrammarRoadmap, normalizeGrammarText, topicKey, topicSummary } from '../data/grammarInsights.js'
 
 const STATUS = {
@@ -149,7 +150,6 @@ export default function GrammarScreen({ lang }) {
     setProgress(prevMap => ({ ...prevMap, [id]: row }))
     const { error: progressError } = await supabase.from('grammar_progress').upsert(row, { onConflict: 'user_id,lang,category,topic' })
     if (progressError) setError(progressError.message)
-
     if (!isAnswer) return
     const exercise = patch.answer.exercise
     if (!patch.answer.correct) {
@@ -160,13 +160,11 @@ export default function GrammarScreen({ lang }) {
       const { error: mistakeError } = await supabase.from('grammar_mistakes').upsert(mistakeRow, { onConflict: 'user_id,lang,topic,exercise_id' })
       if (mistakeError) setError(mistakeError.message)
     }
-
     const today = new Date().toISOString().slice(0, 10)
     const nextCompleted = Math.min(challenge.target || 5, (challenge.completed || 0) + 1)
     setChallenge(prevCh => ({ ...prevCh, completed: nextCompleted }))
     const { error: challengeError } = await supabase.from('grammar_daily_challenges').upsert({ user_id: userId, challenge_date: today, target: challenge.target || 5, completed: nextCompleted, xp: nextCompleted * 10, completed_at: nextCompleted >= (challenge.target || 5) ? new Date().toISOString() : null }, { onConflict: 'user_id,challenge_date' })
     if (challengeError) setError(challengeError.message)
-
     const stats = { seen, correct: correctCount, total: answeredTotal, accuracy: answeredTotal ? Math.round((correctCount / answeredTotal) * 100) : 0, mastered: rows.filter(row => (row.mastery || 0) >= 100 || row.status === 'mastered').length }
     for (const [achievementId, , test] of ACHIEVEMENTS) {
       if (!test(stats) || achievements.includes(achievementId)) continue
@@ -198,36 +196,24 @@ export default function GrammarScreen({ lang }) {
     if (result.error) setError(result.error.message)
   }
 
-  const resolveTopic = (categoryOrName, topicOrTitle) => {
+  const openTopic = (categoryOrName, topicOrTitle) => {
     const categoryObj = typeof categoryOrName === 'string' ? categories.find(c => c.cat === categoryOrName) : categoryOrName
     const topicTitle = typeof topicOrTitle === 'string' ? topicOrTitle : topicOrTitle?.title
     const topicObj = categoryObj ? (categoryObj.topics || []).find(t => t.title === topicTitle) : null
-    return { category: categoryObj, topic: topicObj, topicTitle }
-  }
-
-  const openTopic = (categoryOrName, topicOrTitle) => {
-    const { category, topic, topicTitle } = resolveTopic(categoryOrName, topicOrTitle)
-    if (!category || !topicTitle) return
-    void saveProgress(category, topicTitle, { view: true })
-    setSelected({ category, topicTitle })
+    if (!categoryObj || !topicObj) return
+    setSelected({ category: categoryObj, topic: topicObj })
     setMode('topic')
   }
 
-  const backToDashboard = () => {
-    setSelected(null)
-    setMode('dashboard')
-    setReloadKey(v => v + 1)
-  }
-
   const visibleCategories = useMemo(() => {
-    const q = normalizeGrammarText(query)
+    const q = normalizeGrammarText(query.trim())
     return categories.map(category => ({
       ...category,
       topics: (category.topics || []).filter(topic => {
         const id = topicKey(lang, category.cat, topic.title)
+        const haystack = normalizeGrammarText([category.cat, topic.title, topic.body, ...(topic.ex || [])].join(' '))
+        const matchesQuery = !q || haystack.includes(q)
         const row = progress[id]
-        const hay = normalizeGrammarText(`${category.cat} ${topic.title} ${topic.body} ${(topic.ex || []).join(' ')}`)
-        const matchesQuery = !q || hay.includes(q)
         const matchesFilter = filter === 'all' || (filter === 'bookmarks' && bookmarks.has(id)) || (filter === 'mastered' && (row?.mastery || 0) >= 100) || (filter === 'learning' && row && row.status !== 'new')
         return matchesQuery && matchesFilter
       }),
@@ -237,31 +223,18 @@ export default function GrammarScreen({ lang }) {
   if (loading) return <div style={{ padding: 20, color: C.ts }}>გრამატიკის მონაცემები იტვირთება...</div>
   if (!userId) return <div style={{ padding: 20, color: C.ts, lineHeight: 1.8 }}>🔐 გრამატიკის პროგრესის, ფავორიტებისა და ჩანაწერების შესანახად ავტორიზაცია საჭიროა.</div>
 
-  if (mode === 'diagnostic') {
-    return <GrammarErrorBoundary C={C}><GrammarDiagnosticScreen lang={lang} onBack={backToDashboard} onDone={() => { setReloadKey(v => v + 1); setMode('report') }} /></GrammarErrorBoundary>
-  }
-  if (mode === 'analytics') {
-    return <GrammarErrorBoundary C={C}><GrammarAnalyticsScreen lang={lang} analytics={analytics} onBack={backToDashboard} onOpenDiagnostic={() => setMode('diagnostic')} onOpenMistakes={() => setMode('mistakes')} onOpenReview={() => setMode('review')} onOpenRoadmap={() => setMode('roadmap')} onOpenPractice={() => setMode('practice')} onOpenReport={() => setMode('report')} /></GrammarErrorBoundary>
-  }
-  if (mode === 'roadmap') {
-    return <GrammarErrorBoundary C={C}><GrammarRoadmapScreen lang={lang} categories={categories} progress={progress} onBack={backToDashboard} onOpenTopic={openTopic} /></GrammarErrorBoundary>
-  }
-  if (mode === 'practice') {
-    return <GrammarErrorBoundary C={C}><GrammarPracticeModesScreen lang={lang} categories={categories} progress={progress} due={due} onBack={backToDashboard} onOpenTopic={openTopic} onStartReview={() => setMode('review')} /></GrammarErrorBoundary>
-  }
-  if (mode === 'report') {
-    return <GrammarErrorBoundary C={C}><GrammarProgressReportScreen lang={lang} analytics={analytics} onBack={backToDashboard} onOpenRoadmap={() => setMode('roadmap')} onOpenDiagnostics={() => setMode('diagnostic')} /></GrammarErrorBoundary>
-  }
-  if (mode === 'review') {
-    return <GrammarErrorBoundary C={C}><GrammarReviewScreen lang={lang} onBack={backToDashboard} /></GrammarErrorBoundary>
-  }
-  if (mode === 'mistakes') {
-    return <GrammarErrorBoundary C={C}><GrammarMistakesScreen lang={lang} onBack={backToDashboard} onReview={() => setMode('review')} /></GrammarErrorBoundary>
-  }
+  if (mode === 'advanced') return <GrammarErrorBoundary C={C}><GrammarAdvancedHub lang={lang} categories={categories} progress={progress} due={due} mistakes={mistakes} sessions={sessions} analytics={analytics} onBack={() => setMode('dashboard')} onOpenTopic={openTopic} onOpenRoadmap={() => setMode('roadmap')} /></GrammarErrorBoundary>
+  if (mode === 'diagnostic') return <GrammarErrorBoundary C={C}><GrammarDiagnosticScreen lang={lang} onBack={() => setMode('dashboard')} onDone={() => { setReloadKey(v => v + 1); setMode('report') }} /></GrammarErrorBoundary>
+  if (mode === 'analytics') return <GrammarErrorBoundary C={C}><GrammarAnalyticsScreen lang={lang} analytics={analytics} onBack={() => setMode('dashboard')} onOpenDiagnostic={() => setMode('diagnostic')} onOpenMistakes={() => setMode('mistakes')} onOpenReview={() => setMode('review')} onOpenRoadmap={() => setMode('roadmap')} onOpenPractice={() => setMode('practice')} onOpenReport={() => setMode('report')} /></GrammarErrorBoundary>
+  if (mode === 'roadmap') return <GrammarErrorBoundary C={C}><GrammarRoadmapScreen lang={lang} categories={categories} progress={progress} onBack={() => setMode('dashboard')} onOpenTopic={openTopic} /></GrammarErrorBoundary>
+  if (mode === 'practice') return <GrammarErrorBoundary C={C}><GrammarPracticeModesScreen lang={lang} categories={categories} progress={progress} due={due} onBack={() => setMode('dashboard')} onOpenTopic={openTopic} onStartReview={() => setMode('review')} /></GrammarErrorBoundary>
+  if (mode === 'report') return <GrammarErrorBoundary C={C}><GrammarProgressReportScreen lang={lang} analytics={analytics} onBack={() => setMode('dashboard')} onOpenRoadmap={() => setMode('roadmap')} onOpenDiagnostics={() => setMode('diagnostic')} onOpenTopic={openTopic} /></GrammarErrorBoundary>
+  if (mode === 'review') return <GrammarErrorBoundary C={C}><GrammarReviewScreen lang={lang} onBack={() => setMode('dashboard')} /></GrammarErrorBoundary>
+  if (mode === 'mistakes') return <GrammarErrorBoundary C={C}><GrammarMistakesScreen lang={lang} onBack={() => setMode('dashboard')} onReview={() => setMode('review')} /></GrammarErrorBoundary>
   if (mode === 'topic' && selected?.category && selected?.topicTitle) {
     const id = topicKey(lang, selected.category.cat, selected.topicTitle)
     const topic = selected.category.topics.find(t => t.title === selected.topicTitle)
-    return <GrammarErrorBoundary C={C}><GrammarTopicPanel lang={lang} category={selected.category} topic={topic} progress={progress[id]} bookmarked={bookmarks.has(id)} note={notes[id] || ''} onBack={backToDashboard} onBookmark={() => toggleBookmark(selected.category, selected.topicTitle)} onSaveNote={noteValue => saveNote(selected.category, selected.topicTitle, noteValue)} onUpdateStatus={status => saveProgress(selected.category, selected.topicTitle, { status })} onAnswered={payload => saveProgress(selected.category, selected.topicTitle, { answer: payload })} onOpenTopic={openTopic} /></GrammarErrorBoundary>
+    return <GrammarErrorBoundary C={C}><GrammarTopicPanel lang={lang} category={selected.category} topic={topic} progress={progress[id]} bookmarked={bookmarks.has(id)} note={notes[id] || ''} onBack={() => setMode('dashboard')} onBookmark={() => toggleBookmark(selected.category, selected.topicTitle)} onSaveNote={noteValue => saveNote(selected.category, selected.topicTitle, noteValue)} onUpdateStatus={status => updateProgress(selected.category, selected.topicTitle, { status })} onAnswered={payload => updateProgress(selected.category, selected.topicTitle, { answer: payload })} onOpenTopic={openTopic} /></GrammarErrorBoundary>
   }
 
   return (
@@ -274,16 +247,7 @@ export default function GrammarScreen({ lang }) {
 
         {error && <div style={{ marginBottom: 12, padding: 12, borderRadius: 12, background: `${C.r}14`, border: `1px solid ${C.r}55`, color: C.r, lineHeight: 1.6 }}>⚠️ Backend შეცდომა: {error}<br /><small>თუ ეს არის RLS ან relation შეცდომა, გაუშვი <b>supabase/migrations/grammar_3_0.sql</b> Supabase SQL Editor-ში. სრული schema.sql თავიდან არ გაუშვა.</small></div>}
 
-        <StatGrid
-          C={C}
-          gls={gls}
-          items={[
-            { icon: '📚', label: 'თემები', value: analytics.totalTopics },
-            { icon: '📈', label: 'საშუალო mastery', value: `${analytics.averageMastery}%` },
-            { icon: '🏆', label: 'ათვისებული', value: analytics.mastered },
-            { icon: '🎯', label: 'სიზუსტე', value: `${analytics.accuracy}%` },
-          ]}
-        />
+        <StatGrid C={C} gls={gls} items={[{ icon: '📚', label: 'თემები', value: analytics.totalTopics }, { icon: '📈', label: 'საშუალო mastery', value: `${analytics.averageMastery}%` }, { icon: '🏆', label: 'ათვისებული', value: analytics.mastered }, { icon: '🎯', label: 'სიზუსტე', value: `${analytics.accuracy}%` }]} />
 
         <SectionCard title="📅 დღევანდელი Challenge" C={C} gls={gls}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, color: C.ts }}><span>Daily goal</span><strong style={{ color: C.a }}>{challenge.completed || 0}/{challenge.target || 5}</strong></div>
@@ -299,10 +263,11 @@ export default function GrammarScreen({ lang }) {
               <button onClick={() => setMode('roadmap')} style={{ borderRadius: 12, padding: '10px 12px', border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }}>🧭 Roadmap</button>
               <button onClick={() => setMode('practice')} style={{ borderRadius: 12, padding: '10px 12px', border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }}>🎛️ Practice modes</button>
               <button onClick={() => setMode('report')} style={{ borderRadius: 12, padding: '10px 12px', border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }}>📈 Report</button>
-              <button onClick={() => setMode('review')} style={{ borderRadius: 12, padding: '10px 12px', border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }}>🔁 Review</button>
+              <button onClick={() => setMode('advanced')} style={{ borderRadius: 12, padding: '10px 12px', border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }}>🧠 Advanced hub</button>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button onClick={() => setMode('mistakes')} style={{ borderRadius: 12, padding: '9px 12px', border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }}>❌ Mistakes {due.length ? `(${due.length})` : ''}</button>
+              <button onClick={() => setMode('review')} style={{ borderRadius: 12, padding: '9px 12px', border: `1px solid ${C.bdL}`, background: C.card2, color: C.t, fontFamily: 'inherit' }}>🔁 Review</button>
             </div>
           </div>
         </SectionCard>
@@ -316,29 +281,7 @@ export default function GrammarScreen({ lang }) {
 
         <div style={{ color: C.ts, fontSize: 12, marginBottom: 10 }}>📖 {seen} ნანახი · ✅ {correct} სწორი · ❌ {wrong} შეცდომა · 🏅 {achievements.length} achievement</div>
 
-        <div style={{ display: 'grid', gap: 12 }}>
-          {visibleCategories.map(category => (
-            <section key={category.cat} style={gls({ padding: 14 })}>
-              <h2 style={{ color: C.t, fontSize: 18, margin: '0 0 10px' }}>{category.icon} {category.cat}</h2>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {category.topics.map(topic => {
-                  const id = topicKey(lang, category.cat, topic.title)
-                  const row = progress[id]
-                  return (
-                    <GrammarTopicCard
-                      key={topic.title}
-                      title={topic.title}
-                      subtitle={topicSummary(topic)}
-                      mastery={row?.mastery || 0}
-                      onClick={() => openTopic(category, topic.title)}
-                      C={C}
-                    />
-                  )
-                })}
-              </div>
-            </section>
-          ))}
-        </div>
+        <div style={{ display: 'grid', gap: 12 }}>{visibleCategories.map(category => <section key={category.cat} style={gls({ padding: 14 })}><h2 style={{ color: C.t, fontSize: 18, margin: '0 0 10px' }}>{category.icon} {category.cat}</h2><div style={{ display: 'grid', gap: 8 }}>{category.topics.map(topic => { const id = topicKey(lang, category.cat, topic.title); const row = progress[id]; return <GrammarTopicCard key={topic.title} title={topic.title} subtitle={topicSummary(topic)} mastery={row?.mastery || 0} onClick={() => openTopic(category, topic.title)} C={C} /> })}</div></section>)}</div>
       </div>
     </GrammarErrorBoundary>
   )
