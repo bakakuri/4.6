@@ -237,6 +237,33 @@ export default function AdminControlCenter({ lang, user }) {
                   fontWeight: 800,
                   fontSize: 14,
                   marginBottom: 10
+        {contentTab === 'logs' && (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <input
+              value={logSearch}
+              onChange={e => setLogSearch(e.target.value)}
+              placeholder="🔍 audit log search..."
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                background: C.card3,
+                border: `1px solid ${C.bdL}`,
+                borderRadius: 10,
+                padding: '10px 14px',
+                color: C.t,
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit'
+              }}
+            />
+
+            <div style={{ ...gls({ padding: 14 }) }}>
+              <div
+                style={{
+                  color: C.t,
+                  fontWeight: 800,
+                  fontSize: 14,
+                  marginBottom: 10
                 }}
               >
                 Audit logs ({filteredLogs.length})
@@ -309,12 +336,7 @@ export default function AdminControlCenter({ lang, user }) {
                 ))}
 
                 {filteredLogs.length === 0 && (
-                  <div
-                    style={{
-                      color: C.ts,
-                      fontSize: 12
-                    }}
-                  >
+                  <div style={{ color: C.ts, fontSize: 12 }}>
                     No audit logs found.
                   </div>
                 )}
@@ -326,4 +348,4 @@ export default function AdminControlCenter({ lang, user }) {
       </div>
     </div>
   )
-      }
+                }
