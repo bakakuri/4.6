@@ -1,103 +1,38 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '../lib/ThemeContext.jsx'
 import { supabase } from '../lib/supabase.js'
-import {
-  getAllProfiles,
-  getSiteStats,
-  adminSetXP,
-  adminSetStreak,
-  adminToggleAdmin,
-  adminToggleBlock,
-  adminDeleteMessage,
-  adminDeleteUserMessages,
-  adminBroadcast,
-} from '../utils/db.js'
+import { getAllProfiles, getSiteStats, adminSetXP, adminSetStreak, adminToggleAdmin, adminToggleBlock, adminDeleteMessage, adminDeleteUserMessages, adminBroadcast } from '../utils/db.js'
 
 const LANG_FLAG = { german: '🇩🇪', english: '🇬🇧', russian: '🇷🇺', spanish: '🇪🇸', french: '🇫🇷' }
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
-const EXERCISE_TYPES = ['multiple_choice', 'fill_blank', 'translation', 'word_order', 'correction']
-
+const EX_TYPES = ['multiple_choice', 'fill_blank', 'translation', 'word_order', 'correction']
 const EMPTY_TOPIC = { level: 'A1', title: '', description: '', category: '', order_index: 0, is_active: true }
-const EMPTY_EXERCISE = { topic_id: '', level: 'A1', exercise_type: 'multiple_choice', question: '', optionsText: '[]', correct_answer: '', explanation: '', xp_reward: 5, is_active: true }
+const EMPTY_EX = { topic_id: '', level: 'A1', exercise_type: 'multiple_choice', question: '', optionsText: '[]', correct_answer: '', explanation: '', xp_reward: 5, is_active: true }
 const EMPTY_WORD = { word: '', translation: '', article: '', plural: '', phonetic: '', example: '', level: 'A1', image_url: '', is_active: true }
 const EMPTY_LESSON = { title: '', level: 'A1', description: '', order_index: 0, is_locked: false }
 
-const toJsonText = (value) => {
-  try {
-    return JSON.stringify(value ?? {}, null, 2)
-  } catch {
-    return '{}'
-  }
-}
-
-const parseJsonOrText = (text) => {
-  const raw = String(text ?? '').trim()
-  if (!raw) return ''
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return raw
-  }
-}
+const toJsonText = (v) => { try { return JSON.stringify(v ?? {}, null, 2) } catch { return '{}' } }
+const parseJsonOrText = (text) => { const raw = String(text ?? '').trim(); if (!raw) return ''; try { return JSON.parse(raw) } catch { return raw } }
 
 function Field({ label, children, hint }) {
-  return (
-    <label style={{ display: 'grid', gap: 4 }}>
-      <span style={{ fontSize: 11, color: 'inherit', opacity: 0.72 }}>{label}</span>
-      {children}
-      {hint ? <span style={{ fontSize: 10, color: 'inherit', opacity: 0.55, lineHeight: 1.4 }}>{hint}</span> : null}
-    </label>
-  )
+  return <label style={{ display: 'grid', gap: 4 }}><span style={{ fontSize: 11, opacity: .72 }}>{label}</span>{children}{hint ? <span style={{ fontSize: 10, opacity: .55, lineHeight: 1.4 }}>{hint}</span> : null}</label>
 }
-
-function ActionButton({ children, tone = 'primary', ...props }) {
-  return (
-    <button
-      {...props}
-      style={{
-        border: 'none',
-        borderRadius: 10,
-        padding: '9px 12px',
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-        fontWeight: 800,
-        fontSize: 12,
-        background: tone === 'danger' ? 'rgba(239,68,68,0.18)' : tone === 'muted' ? 'rgba(148,163,184,0.14)' : 'linear-gradient(135deg, #5d6bff, #a855f7)',
-        color: tone === 'danger' ? '#ef4444' : tone === 'muted' ? 'inherit' : '#fff',
-        border: tone === 'danger' ? '1px solid rgba(239,68,68,0.32)' : tone === 'muted' ? '1px solid rgba(148,163,184,0.22)' : 'none',
-        ...props.style,
-      }}
-    >
-      {children}
-    </button>
-  )
+function Btn({ children, tone = 'primary', style = {}, ...props }) {
+  const base = tone === 'danger' ? { bg: 'rgba(239,68,68,0.18)', c: '#ef4444', b: '1px solid rgba(239,68,68,0.32)' } : tone === 'muted' ? { bg: 'rgba(148,163,184,0.14)', c: 'inherit', b: '1px solid rgba(148,163,184,0.22)' } : { bg: 'linear-gradient(135deg,#5d6bff,#a855f7)', c: '#fff', b: 'none' }
+  return <button {...props} style={{ border: base.b, background: base.bg, color: base.c, borderRadius: 10, padding: '9px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: 12, ...style }}>{children}</button>
 }
-
 function Badge({ children, tone = 'neutral' }) {
-  const styles = {
-    neutral: { background: 'rgba(148,163,184,0.14)', color: 'inherit', border: '1px solid rgba(148,163,184,0.22)' },
-    green: { background: 'rgba(34,197,94,0.14)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.24)' },
-    red: { background: 'rgba(239,68,68,0.14)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.24)' },
-    gold: { background: 'rgba(245,158,11,0.16)', color: '#d97706', border: '1px solid rgba(245,158,11,0.24)' },
-    blue: { background: 'rgba(59,130,246,0.14)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.24)' },
-  }
-  return (
-    <span style={{ ...styles[tone], borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-      {children}
-    </span>
-  )
+  const s = tone === 'green' ? { bg: 'rgba(34,197,94,0.14)', c: '#16a34a', b: '1px solid rgba(34,197,94,0.24)' } : tone === 'red' ? { bg: 'rgba(239,68,68,0.14)', c: '#ef4444', b: '1px solid rgba(239,68,68,0.24)' } : tone === 'gold' ? { bg: 'rgba(245,158,11,0.16)', c: '#d97706', b: '1px solid rgba(245,158,11,0.24)' } : tone === 'blue' ? { bg: 'rgba(59,130,246,0.14)', c: '#3b82f6', b: '1px solid rgba(59,130,246,0.24)' } : { bg: 'rgba(148,163,184,0.14)', c: 'inherit', b: '1px solid rgba(148,163,184,0.22)' }
+  return <span style={{ ...s, borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center' }}>{children}</span>
 }
 
 export default function AdminControlCenter({ lang, user }) {
   const { C, gls } = useTheme()
-
   const [tab, setTab] = useState('users')
   const [contentTab, setContentTab] = useState('grammar')
-
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(null)
   const [toast, setToast] = useState(null)
-
   const [profiles, setProfiles] = useState([])
   const [chatMsgs, setChatMsgs] = useState([])
   const [stats, setStats] = useState(null)
@@ -107,29 +42,22 @@ export default function AdminControlCenter({ lang, user }) {
   const [lessons, setLessons] = useState([])
   const [siteSettings, setSiteSettings] = useState([])
   const [auditLogs, setAuditLogs] = useState([])
-
   const [search, setSearch] = useState('')
   const [chatSearch, setChatSearch] = useState('')
   const [contentSearch, setContentSearch] = useState('')
   const [logSearch, setLogSearch] = useState('')
   const [broadcast, setBroadcast] = useState('')
-
   const [editId, setEditId] = useState(null)
   const [editXP, setEditXP] = useState('')
   const [editStreak, setEditStreak] = useState('')
-
   const [topicEditId, setTopicEditId] = useState(null)
   const [topicForm, setTopicForm] = useState(EMPTY_TOPIC)
-
   const [exerciseEditId, setExerciseEditId] = useState(null)
-  const [exerciseForm, setExerciseForm] = useState(EMPTY_EXERCISE)
-
+  const [exerciseForm, setExerciseForm] = useState(EMPTY_EX)
   const [wordEditId, setWordEditId] = useState(null)
   const [wordForm, setWordForm] = useState(EMPTY_WORD)
-
   const [lessonEditId, setLessonEditId] = useState(null)
   const [lessonForm, setLessonForm] = useState(EMPTY_LESSON)
-
   const [settingDrafts, setSettingDrafts] = useState({})
   const [newSettingKey, setNewSettingKey] = useState('')
   const [newSettingValue, setNewSettingValue] = useState('{\n  "enabled": false\n}')
@@ -143,22 +71,14 @@ export default function AdminControlCenter({ lang, user }) {
   const writeAudit = useCallback(async (action, entityType = null, entityId = null, details = {}) => {
     try {
       if (!user?.id) return
-      await supabase.from('admin_audit_log').insert({
-        admin_id: user.id,
-        action,
-        entity_type: entityType,
-        entity_id: entityId,
-        details,
-      })
-    } catch (error) {
-      console.error('audit', error)
-    }
+      await supabase.from('admin_audit_log').insert({ admin_id: user.id, action, entity_type: entityType, entity_id: entityId, details })
+    } catch (error) { console.error('audit', error) }
   }, [user?.id])
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [ps, st, chatRes, topicsRes, exercisesRes, wordsRes, lessonsRes, settingsRes, logsRes] = await Promise.all([
+      const [ps, st, chatRes, topicsRes, exRes, wordsRes, lessonsRes, settingsRes, logsRes] = await Promise.all([
         getAllProfiles(),
         getSiteStats(),
         supabase.from('chat_messages').select('*').order('created_at', { ascending: false }).limit(200),
@@ -169,1017 +89,128 @@ export default function AdminControlCenter({ lang, user }) {
         supabase.from('site_settings').select('*').order('key', { ascending: true }),
         supabase.from('admin_audit_log').select('*').order('created_at', { ascending: false }).limit(200),
       ])
-
-      const firstError = chatRes.error || topicsRes.error || exercisesRes.error || wordsRes.error || lessonsRes.error || settingsRes.error || logsRes.error
+      const firstError = chatRes.error || topicsRes.error || exRes.error || wordsRes.error || lessonsRes.error || settingsRes.error || logsRes.error
       if (firstError) showToast(firstError.message, false)
-
       setProfiles(ps || [])
       setStats(st || null)
       setChatMsgs((chatRes.data || []).reverse())
       setTopics(topicsRes.data || [])
-      setExercises(exercisesRes.data || [])
+      setExercises(exRes.data || [])
       setWords(wordsRes.data || [])
       setLessons(lessonsRes.data || [])
       setSiteSettings(settingsRes.data || [])
       setAuditLogs(logsRes.data || [])
       setSettingDrafts(Object.fromEntries((settingsRes.data || []).map(row => [row.key, toJsonText(row.value)])))
+    } finally { setLoading(false) }
+  }, [])
 
-      if (!topicEditId && (topicsRes.data || []).length > 0 && !topicForm.title) {
-        const firstTopic = (topicsRes.data || [])[0]
-        setTopicForm({
-          level: firstTopic.level || 'A1',
-          title: firstTopic.title || '',
-          description: firstTopic.description || '',
-          category: firstTopic.category || '',
-          order_index: firstTopic.order_index || 0,
-          is_active: firstTopic.is_active ?? true,
-        })
-      }
-      if (!lessonEditId && (lessonsRes.data || []).length > 0 && !lessonForm.title) {
-        const firstLesson = (lessonsRes.data || [])[0]
-        setLessonForm({
-          title: firstLesson.title || '',
-          level: firstLesson.level || 'A1',
-          description: firstLesson.description || '',
-          order_index: firstLesson.order_index || 0,
-          is_locked: firstLesson.is_locked ?? false,
-        })
-      }
-      if (!wordEditId && (wordsRes.data || []).length > 0 && !wordForm.word) {
-        const firstWord = (wordsRes.data || [])[0]
-        setWordForm({
-          word: firstWord.word || '',
-          translation: firstWord.translation || '',
-          article: firstWord.article || '',
-          plural: firstWord.plural || '',
-          phonetic: firstWord.phonetic || '',
-          example: firstWord.example || '',
-          level: firstWord.level || 'A1',
-          image_url: firstWord.image_url || '',
-          is_active: firstWord.is_active ?? true,
-        })
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [lessonEditId, lessonForm.title, setLoading, topicEditId, topicForm.title, wordEditId, wordForm.word])
+  useEffect(() => { load() }, [load])
+  useEffect(() => { if (!exerciseForm.topic_id && topics[0]) setExerciseForm(prev => ({ ...prev, topic_id: topics[0].id, level: topics[0].level || prev.level })) }, [topics, exerciseForm.topic_id])
 
-  useEffect(() => {
-    load()
-  }, [load])
-
-  useEffect(() => {
-    if (!exerciseForm.topic_id && topics.length > 0) {
-      setExerciseForm(prev => ({ ...prev, topic_id: topics[0].id, level: topics[0].level || prev.level }))
-    }
-  }, [topics, exerciseForm.topic_id])
-
+  const topicMap = useMemo(() => Object.fromEntries(topics.map(t => [t.id, t])), [topics])
+  const filteredTopics = topics.filter(t => `${t.level} ${t.category || ''} ${t.title} ${t.description || ''}`.toLowerCase().includes(contentSearch.toLowerCase()))
+  const filteredExercises = exercises.filter(ex => (!exerciseForm.topic_id || ex.topic_id === exerciseForm.topic_id) && `${ex.level} ${ex.exercise_type} ${ex.question} ${ex.correct_answer} ${(topicMap[ex.topic_id]?.title || '')}`.toLowerCase().includes(contentSearch.toLowerCase()))
+  const filteredWords = words.filter(w => `${w.level} ${w.word} ${w.translation} ${w.example || ''} ${w.phonetic || ''}`.toLowerCase().includes(contentSearch.toLowerCase()))
+  const filteredLessons = lessons.filter(l => `${l.level} ${l.title} ${l.description || ''}`.toLowerCase().includes(contentSearch.toLowerCase()))
+  const filteredLogs = auditLogs.filter(l => `${l.action} ${l.entity_type || ''} ${l.entity_id || ''} ${JSON.stringify(l.details || {})}`.toLowerCase().includes(logSearch.toLowerCase()))
   const filtProfiles = profiles.filter(p => !search || p.username.toLowerCase().includes(search.toLowerCase()))
   const filtMsgs = chatMsgs.filter(m => !chatSearch || (m.username || '').toLowerCase().includes(chatSearch.toLowerCase()) || (m.text || '').toLowerCase().includes(chatSearch.toLowerCase()))
-  const topicMap = useMemo(() => Object.fromEntries(topics.map(t => [t.id, t])), [topics])
-  const lessonMap = useMemo(() => Object.fromEntries(lessons.map(l => [l.id, l])), [lessons])
-  const filteredTopics = topics.filter(t => {
-    const hay = `${t.level} ${t.category || ''} ${t.title} ${t.description || ''}`.toLowerCase()
-    return !contentSearch || hay.includes(contentSearch.toLowerCase())
-  })
-  const filteredExercises = exercises.filter(ex => {
-    const topic = topicMap[ex.topic_id]
-    const hay = `${ex.level} ${ex.exercise_type} ${ex.question} ${ex.correct_answer} ${ex.explanation || ''} ${(topic?.title || '')}`.toLowerCase()
-    return (!exerciseForm.topic_id || ex.topic_id === exerciseForm.topic_id) && (!contentSearch || hay.includes(contentSearch.toLowerCase()))
-  })
-  const filteredWords = words.filter(w => {
-    const hay = `${w.level} ${w.word} ${w.translation} ${w.example || ''} ${w.phonetic || ''}`.toLowerCase()
-    return !contentSearch || hay.includes(contentSearch.toLowerCase())
-  })
-  const filteredLessons = lessons.filter(l => {
-    const hay = `${l.level} ${l.title} ${l.description || ''}`.toLowerCase()
-    return !contentSearch || hay.includes(contentSearch.toLowerCase())
-  })
-  const filteredLogs = auditLogs.filter(l => {
-    const hay = `${l.action} ${l.entity_type || ''} ${l.entity_id || ''} ${JSON.stringify(l.details || {})}`.toLowerCase()
-    return !logSearch || hay.includes(logSearch.toLowerCase())
-  })
 
-  const saveProfileField = async (profile, field, value, tag) => {
-    setSaving(`${tag}-${profile.id}`)
-    await supabase.from('profiles').update({ [field]: value }).eq('id', profile.id)
-    await writeAudit(`set_${field}`, 'profile', profile.id, { [field]: value })
-    setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, [field]: value } : p))
-    setSaving(null)
-  }
+  const refresh = async () => { await load() }
 
-  const saveXP = async (profile) => {
-    if (editXP === '') return
-    setSaving(`xp-${profile.id}`)
-    await adminSetXP(profile.id, editXP, user?.id)
-    setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, xp: Number(editXP) } : p))
-    setSaving(null)
-    showToast(`${profile.username}: XP → ${editXP}`)
-  }
+  const saveXP = async (profile) => { if (editXP === '') return; setSaving(`xp-${profile.id}`); await adminSetXP(profile.id, editXP, user?.id); setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, xp: Number(editXP) } : p)); setSaving(null); showToast(`${profile.username}: XP → ${editXP}`) }
+  const saveStreak = async (profile) => { if (editStreak === '') return; setSaving(`st-${profile.id}`); await adminSetStreak(profile.id, editStreak, user?.id); setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, streak: Number(editStreak) } : p)); setSaving(null); showToast(`${profile.username}: Streak → ${editStreak}`) }
+  const toggleAdmin = async (profile) => { if (profile.id === user?.id) return showToast('საკუთარ admin უფლებას ვერ მოიხსნი.', false); setSaving(`adm-${profile.id}`); await adminToggleAdmin(profile.id, !profile.is_admin, user?.id); setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, is_admin: !profile.is_admin } : p)); setSaving(null); showToast(`${profile.username}: ${!profile.is_admin ? 'ადმინი დაემატა' : 'ადმინი მოიხსნა'}`) }
+  const toggleBlock = async (profile) => { if (profile.id === user?.id) return showToast('საკუთარი თავი არ დაბლოკო.', false); setSaving(`blk-${profile.id}`); await adminToggleBlock(profile.id, !profile.chat_blocked, user?.id); setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, chat_blocked: !profile.chat_blocked } : p)); setSaving(null); showToast(`${profile.username}: ${!profile.chat_blocked ? 'დაიბლოკა' : 'განიბლოკა'}`, !profile.chat_blocked ? false : true) }
+  const toggleHidden = async (profile) => { if (profile.id === user?.id) return showToast('საკუთარი ანგარიში არ დამალო.', false); setSaving(`hid-${profile.id}`); const next = !profile.account_hidden; await supabase.from('profiles').update({ account_hidden: next }).eq('id', profile.id); await writeAudit(next ? 'hide_user' : 'unhide_user', 'profile', profile.id, { account_hidden: next }); setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, account_hidden: next } : p)); setSaving(null); showToast(`${profile.username}: ${next ? 'დამალულია' : 'გამოჩნდა'}`) }
+  const softDeleteUser = async (profile) => { if (profile.id === user?.id) return showToast('საკუთარი ანგარიში აქედან არ წაიშლება.', false); if (!confirm(`დროებით წაიშალოს ${profile.username}?`)) return; setSaving(`del-${profile.id}`); const next = new Date().toISOString(); await supabase.from('profiles').update({ deleted_at: next, account_hidden: true }).eq('id', profile.id); await writeAudit('soft_delete_user', 'profile', profile.id, { deleted_at: next }); setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, deleted_at: next, account_hidden: true } : p)); setSaving(null); showToast(`${profile.username}: soft delete`, false) }
+  const restoreUser = async (profile) => { setSaving(`res-${profile.id}`); await supabase.from('profiles').update({ deleted_at: null, account_hidden: false }).eq('id', profile.id); await writeAudit('restore_user', 'profile', profile.id); setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, deleted_at: null, account_hidden: false } : p)); setSaving(null); showToast(`${profile.username}: აღდგენილია`) }
+  const deleteUserMsgs = async (profile) => { if (!confirm(`წაიშალოს ${profile.username}-ს ყველა შეტყობინება?`)) return; setSaving(`msg-${profile.id}`); await adminDeleteUserMessages(profile.id, user?.id); setChatMsgs(prev => prev.filter(m => m.user_id !== profile.id)); setSaving(null); showToast(`${profile.username}-ს შეტყობინებები წაიშალა`) }
+  const deleteMsg = async (messageId) => { setSaving(`chat-${messageId}`); await adminDeleteMessage(messageId, user?.id); setChatMsgs(prev => prev.filter(m => m.id !== messageId)); setSaving(null) }
+  const sendBroadcast = async () => { if (!broadcast.trim()) return; setSaving('broadcast'); await adminBroadcast(broadcast.trim(), user?.username || 'Admin', user?.id); setBroadcast(''); setSaving(null); showToast('📢 Broadcast გაიგზავნა') }
 
-  const saveStreak = async (profile) => {
-    if (editStreak === '') return
-    setSaving(`st-${profile.id}`)
-    await adminSetStreak(profile.id, editStreak, user?.id)
-    setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, streak: Number(editStreak) } : p))
-    setSaving(null)
-    showToast(`${profile.username}: Streak → ${editStreak}`)
-  }
+  const saveTopic = async () => { if (!topicForm.title.trim()) return showToast('Topic title აუცილებელია', false); setSaving('topic'); const payload = { level: topicForm.level || 'A1', title: topicForm.title.trim(), description: topicForm.description || '', category: topicForm.category || '', order_index: Number(topicForm.order_index || 0), is_active: Boolean(topicForm.is_active), updated_at: new Date().toISOString() }; const { error } = topicEditId ? await supabase.from('grammar_topics').update(payload).eq('id', topicEditId) : await supabase.from('grammar_topics').insert({ ...payload, created_at: new Date().toISOString() }); if (error) showToast(error.message, false); else { await writeAudit(topicEditId ? 'update_grammar_topic' : 'create_grammar_topic', 'grammar_topic', topicEditId || payload.title, payload); setTopicEditId(null); setTopicForm(EMPTY_TOPIC); await refresh(); showToast(topicEditId ? 'Grammar topic განახლდა' : 'Grammar topic დაემატა') } setSaving(null) }
+  const editTopic = (row) => { setContentTab('grammar'); setTopicEditId(row.id); setTopicForm({ level: row.level || 'A1', title: row.title || '', description: row.description || '', category: row.category || '', order_index: row.order_index || 0, is_active: row.is_active ?? true }) }
+  const removeTopic = async (row) => { if (!confirm(`წაიშალოს topic "${row.title}"?`)) return; setSaving(`topic-del-${row.id}`); const { error } = await supabase.from('grammar_topics').delete().eq('id', row.id); if (error) showToast(error.message, false); else { await writeAudit('delete_grammar_topic', 'grammar_topic', row.id, row); await refresh(); showToast('Grammar topic წაიშალა', false) } setSaving(null) }
+  const toggleTopicActive = async (row) => { setSaving(`topic-active-${row.id}`); const next = !row.is_active; const { error } = await supabase.from('grammar_topics').update({ is_active: next, updated_at: new Date().toISOString() }).eq('id', row.id); if (error) showToast(error.message, false); else { await writeAudit(next ? 'show_grammar_topic' : 'hide_grammar_topic', 'grammar_topic', row.id, { is_active: next }); await refresh() } setSaving(null) }
 
-  const toggleAdmin = async (profile) => {
-    if (profile.id === user?.id) return showToast('საკუთარ admin უფლებას ვერ მოიხსნი.', false)
-    setSaving(`adm-${profile.id}`)
-    await adminToggleAdmin(profile.id, !profile.is_admin, user?.id)
-    setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, is_admin: !profile.is_admin } : p))
-    setSaving(null)
-    showToast(`${profile.username}: ${!profile.is_admin ? 'ადმინი დაემატა' : 'ადმინი მოიხსნა'}`)
-  }
+  const saveExercise = async () => { if (!exerciseForm.topic_id) return showToast('Topic აირჩიე', false); if (!exerciseForm.question.trim()) return showToast('Question აუცილებელია', false); let options; try { const parsed = parseJsonOrText(exerciseForm.optionsText); options = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []) } catch { return showToast('Options JSON არასწორია', false) } setSaving('exercise'); const base = { topic_id: exerciseForm.topic_id, level: exerciseForm.level || 'A1', exercise_type: exerciseForm.exercise_type || 'multiple_choice', question: exerciseForm.question.trim(), options, correct_answer: exerciseForm.correct_answer || '', explanation: exerciseForm.explanation || '', xp_reward: Number(exerciseForm.xp_reward || 5), is_active: Boolean(exerciseForm.is_active) }; const { error } = exerciseEditId ? await supabase.from('grammar_exercises').update(base).eq('id', exerciseEditId) : await supabase.from('grammar_exercises').insert({ ...base, created_at: new Date().toISOString() }); if (error) showToast(error.message, false); else { await writeAudit(exerciseEditId ? 'update_grammar_exercise' : 'create_grammar_exercise', 'grammar_exercise', exerciseEditId || exerciseForm.question.slice(0, 50), base); setExerciseEditId(null); setExerciseForm(EMPTY_EX); await refresh(); showToast(exerciseEditId ? 'Exercise განახლდა' : 'Exercise დაემატა') } setSaving(null) }
+  const editExercise = (row) => { setContentTab('grammar'); setExerciseEditId(row.id); setExerciseForm({ topic_id: row.topic_id || '', level: row.level || 'A1', exercise_type: row.exercise_type || 'multiple_choice', question: row.question || '', optionsText: toJsonText(row.options || []), correct_answer: row.correct_answer || '', explanation: row.explanation || '', xp_reward: row.xp_reward ?? 5, is_active: row.is_active ?? true }) }
+  const removeExercise = async (row) => { if (!confirm(`წაიშალოს exercise "${row.question.slice(0, 40)}"?`)) return; setSaving(`exercise-del-${row.id}`); const { error } = await supabase.from('grammar_exercises').delete().eq('id', row.id); if (error) showToast(error.message, false); else { await writeAudit('delete_grammar_exercise', 'grammar_exercise', row.id, row); await refresh() } setSaving(null) }
+  const toggleExerciseActive = async (row) => { setSaving(`exercise-active-${row.id}`); const next = !row.is_active; const { error } = await supabase.from('grammar_exercises').update({ is_active: next }).eq('id', row.id); if (error) showToast(error.message, false); else { await writeAudit(next ? 'show_grammar_exercise' : 'hide_grammar_exercise', 'grammar_exercise', row.id, { is_active: next }); await refresh() } setSaving(null) }
 
-  const toggleBlock = async (profile) => {
-    if (profile.id === user?.id) return showToast('საკუთარი თავი არ დაბლოკო, გენიოსო.', false)
-    setSaving(`blk-${profile.id}`)
-    await adminToggleBlock(profile.id, !profile.chat_blocked, user?.id)
-    setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, chat_blocked: !profile.chat_blocked } : p))
-    setSaving(null)
-    showToast(`${profile.username}: ${!profile.chat_blocked ? 'დაიბლოკა' : 'განიბლოკა'}`, !profile.chat_blocked ? false : true)
-  }
+  const saveWord = async () => { if (!wordForm.word.trim()) return showToast('Word აუცილებელია', false); setSaving('word'); const base = { word: wordForm.word.trim(), translation: wordForm.translation || '', article: wordForm.article || '', plural: wordForm.plural || '', phonetic: wordForm.phonetic || '', example: wordForm.example || '', level: wordForm.level || 'A1', image_url: wordForm.image_url || '', is_active: Boolean(wordForm.is_active) }; const { error } = wordEditId ? await supabase.from('vocabulary_items').update(base).eq('id', wordEditId) : await supabase.from('vocabulary_items').insert({ ...base, created_at: new Date().toISOString() }); if (error) showToast(error.message, false); else { await writeAudit(wordEditId ? 'update_vocabulary_item' : 'create_vocabulary_item', 'vocabulary_item', wordEditId || base.word, base); setWordEditId(null); setWordForm(EMPTY_WORD); await refresh(); showToast(wordEditId ? 'Vocabulary განახლდა' : 'Vocabulary დაემატა') } setSaving(null) }
+  const editWord = (row) => { setContentTab('vocabulary'); setWordEditId(row.id); setWordForm({ word: row.word || '', translation: row.translation || '', article: row.article || '', plural: row.plural || '', phonetic: row.phonetic || '', example: row.example || '', level: row.level || 'A1', image_url: row.image_url || '', is_active: row.is_active ?? true }) }
+  const removeWord = async (row) => { if (!confirm(`წაიშალოს სიტყვა "${row.word}"?`)) return; setSaving(`word-del-${row.id}`); const { error } = await supabase.from('vocabulary_items').delete().eq('id', row.id); if (error) showToast(error.message, false); else { await writeAudit('delete_vocabulary_item', 'vocabulary_item', row.id, row); await refresh() } setSaving(null) }
+  const toggleWordActive = async (row) => { setSaving(`word-active-${row.id}`); const next = !row.is_active; const { error } = await supabase.from('vocabulary_items').update({ is_active: next }).eq('id', row.id); if (error) showToast(error.message, false); else { await writeAudit(next ? 'show_vocabulary_item' : 'hide_vocabulary_item', 'vocabulary_item', row.id, { is_active: next }); await refresh() } setSaving(null) }
 
-  const toggleHidden = async (profile) => {
-    if (profile.id === user?.id) return showToast('საკუთარი ანგარიშის დამალვა აღარ გჭირდება, ისედაც ხვდებიან.', false)
-    setSaving(`hid-${profile.id}`)
-    const next = !profile.account_hidden
-    await supabase.from('profiles').update({ account_hidden: next }).eq('id', profile.id)
-    await writeAudit(next ? 'hide_user' : 'unhide_user', 'profile', profile.id, { account_hidden: next })
-    setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, account_hidden: next } : p))
-    setSaving(null)
-    showToast(`${profile.username}: ${next ? 'დამალულია' : 'გამოჩნდა'}`)
-  }
+  const saveLesson = async () => { if (!lessonForm.title.trim()) return showToast('Lesson title აუცილებელია', false); setSaving('lesson'); const base = { title: lessonForm.title.trim(), level: lessonForm.level || 'A1', description: lessonForm.description || '', order_index: Number(lessonForm.order_index || 0), is_locked: Boolean(lessonForm.is_locked) }; const { error } = lessonEditId ? await supabase.from('lessons').update(base).eq('id', lessonEditId) : await supabase.from('lessons').insert({ ...base, created_at: new Date().toISOString() }); if (error) showToast(error.message, false); else { await writeAudit(lessonEditId ? 'update_lesson' : 'create_lesson', 'lesson', lessonEditId || base.title, base); setLessonEditId(null); setLessonForm(EMPTY_LESSON); await refresh(); showToast(lessonEditId ? 'Lesson განახლდა' : 'Lesson დაემატა') } setSaving(null) }
+  const editLesson = (row) => { setContentTab('lessons'); setLessonEditId(row.id); setLessonForm({ title: row.title || '', level: row.level || 'A1', description: row.description || '', order_index: row.order_index || 0, is_locked: row.is_locked ?? false }) }
+  const removeLesson = async (row) => { if (!confirm(`წაიშალოს lesson "${row.title}"?`)) return; setSaving(`lesson-del-${row.id}`); const { error } = await supabase.from('lessons').delete().eq('id', row.id); if (error) showToast(error.message, false); else { await writeAudit('delete_lesson', 'lesson', row.id, row); await refresh() } setSaving(null) }
+  const toggleLessonLock = async (row) => { setSaving(`lesson-lock-${row.id}`); const next = !row.is_locked; const { error } = await supabase.from('lessons').update({ is_locked: next }).eq('id', row.id); if (error) showToast(error.message, false); else { await writeAudit(next ? 'lock_lesson' : 'unlock_lesson', 'lesson', row.id, { is_locked: next }); await refresh() } setSaving(null) }
 
-  const softDeleteUser = async (profile) => {
-    if (profile.id === user?.id) return showToast('საკუთარი ანგარიში აქედან არ უნდა წაშალო.', false)
-    if (!confirm(`დროებით წაიშალოს ${profile.username}?`)) return
-    setSaving(`del-${profile.id}`)
-    const next = new Date().toISOString()
-    await supabase.from('profiles').update({ deleted_at: next, account_hidden: true }).eq('id', profile.id)
-    await writeAudit('soft_delete_user', 'profile', profile.id, { deleted_at: next })
-    setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, deleted_at: next, account_hidden: true } : p))
-    setSaving(null)
-    showToast(`${profile.username}: წაშლილია (soft delete)`, false)
-  }
+  const saveSiteSetting = async (key, draft) => { if (!key.trim()) return; setSaving(`setting-${key}`); const value = parseJsonOrText(draft); const { error } = await supabase.from('site_settings').upsert({ key, value, updated_by: user?.id || null, updated_at: new Date().toISOString() }); if (error) showToast(error.message, false); else { await writeAudit('set_site_setting', 'site_setting', key, { value }); await refresh(); showToast(`Setting "${key}" saved`) } setSaving(null) }
+  const createNewSiteSetting = async () => { if (!newSettingKey.trim()) return showToast('Key აუცილებელია', false); await saveSiteSetting(newSettingKey.trim(), newSettingValue); setNewSettingKey(''); setNewSettingValue('{\n  "enabled": false\n}') }
 
-  const restoreUser = async (profile) => {
-    setSaving(`res-${profile.id}`)
-    await supabase.from('profiles').update({ deleted_at: null, account_hidden: false }).eq('id', profile.id)
-    await writeAudit('restore_user', 'profile', profile.id)
-    setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, deleted_at: null, account_hidden: false } : p))
-    setSaving(null)
-    showToast(`${profile.username}: აღდგენილია`)
-  }
+  const TABS = [{ id: 'users', icon: '👥', label: 'Users' }, { id: 'stats', icon: '📊', label: 'Stats' }, { id: 'chat', icon: '💬', label: 'Chat' }, { id: 'broadcast', icon: '📢', label: 'Broadcast' }, { id: 'content', icon: '🧩', label: 'Content' }]
+  const SUBTABS = [{ id: 'grammar', icon: '📚', label: 'Grammar' }, { id: 'vocabulary', icon: '📝', label: 'Vocabulary' }, { id: 'lessons', icon: '🎓', label: 'Lessons' }, { id: 'settings', icon: '⚙️', label: 'Settings' }, { id: 'logs', icon: '🧾', label: 'Logs' }]
 
-  const deleteUserMsgs = async (profile) => {
-    if (!confirm(`წაიშალოს ${profile.username}-ს ყველა შეტყობინება?`)) return
-    setSaving(`msg-${profile.id}`)
-    await adminDeleteUserMessages(profile.id, user?.id)
-    setChatMsgs(prev => prev.filter(m => m.user_id !== profile.id))
-    setSaving(null)
-    showToast(`${profile.username}-ს შეტყობინებები წაიშალა`)
-  }
-
-  const deleteMsg = async (messageId) => {
-    setSaving(`chat-${messageId}`)
-    await adminDeleteMessage(messageId, user?.id)
-    setChatMsgs(prev => prev.filter(m => m.id !== messageId))
-    setSaving(null)
-  }
-
-  const sendBroadcast = async () => {
-    if (!broadcast.trim()) return
-    setSaving('broadcast')
-    await adminBroadcast(broadcast.trim(), user?.username || 'Admin', user?.id)
-    setBroadcast('')
-    setSaving(null)
-    showToast('📢 Broadcast გაიგზავნა')
-  }
-
-  const saveTopic = async () => {
-    if (!topicForm.title.trim()) return showToast('Topic title აუცილებელია', false)
-    setSaving('topic')
-    const payload = {
-      level: topicForm.level || 'A1',
-      title: topicForm.title.trim(),
-      description: topicForm.description || '',
-      category: topicForm.category || '',
-      order_index: Number(topicForm.order_index || 0),
-      is_active: Boolean(topicForm.is_active),
-      updated_at: new Date().toISOString(),
-    }
-    let error
-    if (topicEditId) {
-      ;({ error } = await supabase.from('grammar_topics').update(payload).eq('id', topicEditId))
-      await writeAudit('update_grammar_topic', 'grammar_topic', topicEditId, payload)
-    } else {
-      ;({ error } = await supabase.from('grammar_topics').insert({ ...payload, created_at: new Date().toISOString() }))
-      await writeAudit('create_grammar_topic', 'grammar_topic', payload.title, payload)
-    }
-    if (error) showToast(error.message, false)
-    else {
-      showToast(topicEditId ? 'Grammar topic განახლდა' : 'Grammar topic დაემატა')
-      setTopicEditId(null)
-      setTopicForm(EMPTY_TOPIC)
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const editTopic = (row) => {
-    setContentTab('grammar')
-    setTopicEditId(row.id)
-    setTopicForm({
-      level: row.level || 'A1',
-      title: row.title || '',
-      description: row.description || '',
-      category: row.category || '',
-      order_index: row.order_index || 0,
-      is_active: row.is_active ?? true,
-    })
-  }
-
-  const removeTopic = async (row) => {
-    if (!confirm(`წაიშალოს topic "${row.title}"?`)) return
-    setSaving(`topic-del-${row.id}`)
-    const { error } = await supabase.from('grammar_topics').delete().eq('id', row.id)
-    if (error) showToast(error.message, false)
-    else {
-      await writeAudit('delete_grammar_topic', 'grammar_topic', row.id, row)
-      showToast('Grammar topic წაიშალა', false)
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const toggleTopicActive = async (row) => {
-    setSaving(`topic-active-${row.id}`)
-    const next = !row.is_active
-    const { error } = await supabase.from('grammar_topics').update({ is_active: next, updated_at: new Date().toISOString() }).eq('id', row.id)
-    if (error) showToast(error.message, false)
-    else {
-      await writeAudit(next ? 'show_grammar_topic' : 'hide_grammar_topic', 'grammar_topic', row.id, { is_active: next })
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const saveExercise = async () => {
-    if (!exerciseForm.topic_id) return showToast('Topic აირჩიე', false)
-    if (!exerciseForm.question.trim()) return showToast('Question აუცილებელია', false)
-    let options = []
-    try {
-      const parsed = parseJsonOrText(exerciseForm.optionsText)
-      options = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : [])
-    } catch {
-      return showToast('Options JSON არასწორია', false)
-    }
-    setSaving('exercise')
-    const payload = {
-      topic_id: exerciseForm.topic_id,
-      level: exerciseForm.level || 'A1',
-      exercise_type: exerciseForm.exercise_type || 'multiple_choice',
-      question: exerciseForm.question.trim(),
-      options,
-      correct_answer: exerciseForm.correct_answer || '',
-      explanation: exerciseForm.explanation || '',
-      xp_reward: Number(exerciseForm.xp_reward || 5),
-      is_active: Boolean(exerciseForm.is_active),
-      created_at: new Date().toISOString(),
-    }
-    let error
-    if (exerciseEditId) {
-      ;({ error } = await supabase.from('grammar_exercises').update({ ...payload, created_at: undefined }).eq('id', exerciseEditId))
-      await writeAudit('update_grammar_exercise', 'grammar_exercise', exerciseEditId, payload)
-    } else {
-      ;({ error } = await supabase.from('grammar_exercises').insert(payload))
-      await writeAudit('create_grammar_exercise', 'grammar_exercise', exerciseForm.question.slice(0, 50), payload)
-    }
-    if (error) showToast(error.message, false)
-    else {
-      showToast(exerciseEditId ? 'Exercise განახლდა' : 'Exercise დაემატა')
-      setExerciseEditId(null)
-      setExerciseForm(EMPTY_EXERCISE)
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const editExercise = (row) => {
-    setContentTab('grammar')
-    setExerciseEditId(row.id)
-    setExerciseForm({
-      topic_id: row.topic_id || '',
-      level: row.level || 'A1',
-      exercise_type: row.exercise_type || 'multiple_choice',
-      question: row.question || '',
-      optionsText: toJsonText(row.options || []),
-      correct_answer: row.correct_answer || '',
-      explanation: row.explanation || '',
-      xp_reward: row.xp_reward ?? 5,
-      is_active: row.is_active ?? true,
-    })
-  }
-
-  const removeExercise = async (row) => {
-    if (!confirm(`წაიშალოს exercise "${row.question.slice(0, 40)}"?`)) return
-    setSaving(`exercise-del-${row.id}`)
-    const { error } = await supabase.from('grammar_exercises').delete().eq('id', row.id)
-    if (error) showToast(error.message, false)
-    else {
-      await writeAudit('delete_grammar_exercise', 'grammar_exercise', row.id, row)
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const toggleExerciseActive = async (row) => {
-    setSaving(`exercise-active-${row.id}`)
-    const next = !row.is_active
-    const { error } = await supabase.from('grammar_exercises').update({ is_active: next }).eq('id', row.id)
-    if (error) showToast(error.message, false)
-    else {
-      await writeAudit(next ? 'show_grammar_exercise' : 'hide_grammar_exercise', 'grammar_exercise', row.id, { is_active: next })
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const saveWord = async () => {
-    if (!wordForm.word.trim()) return showToast('Word აუცილებელია', false)
-    setSaving('word')
-    const payload = {
-      word: wordForm.word.trim(),
-      translation: wordForm.translation || '',
-      article: wordForm.article || '',
-      plural: wordForm.plural || '',
-      phonetic: wordForm.phonetic || '',
-      example: wordForm.example || '',
-      level: wordForm.level || 'A1',
-      image_url: wordForm.image_url || '',
-      is_active: Boolean(wordForm.is_active),
-      created_at: new Date().toISOString(),
-    }
-    let error
-    if (wordEditId) {
-      ;({ error } = await supabase.from('vocabulary_items').update({ ...payload, created_at: undefined }).eq('id', wordEditId))
-      await writeAudit('update_vocabulary_item', 'vocabulary_item', wordEditId, payload)
-    } else {
-      ;({ error } = await supabase.from('vocabulary_items').insert(payload))
-      await writeAudit('create_vocabulary_item', 'vocabulary_item', payload.word, payload)
-    }
-    if (error) showToast(error.message, false)
-    else {
-      showToast(wordEditId ? 'Vocabulary განახლდა' : 'Vocabulary დაემატა')
-      setWordEditId(null)
-      setWordForm(EMPTY_WORD)
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const editWord = (row) => {
-    setContentTab('vocabulary')
-    setWordEditId(row.id)
-    setWordForm({
-      word: row.word || '',
-      translation: row.translation || '',
-      article: row.article || '',
-      plural: row.plural || '',
-      phonetic: row.phonetic || '',
-      example: row.example || '',
-      level: row.level || 'A1',
-      image_url: row.image_url || '',
-      is_active: row.is_active ?? true,
-    })
-  }
-
-  const removeWord = async (row) => {
-    if (!confirm(`წაიშალოს სიტყვა "${row.word}"?`)) return
-    setSaving(`word-del-${row.id}`)
-    const { error } = await supabase.from('vocabulary_items').delete().eq('id', row.id)
-    if (error) showToast(error.message, false)
-    else {
-      await writeAudit('delete_vocabulary_item', 'vocabulary_item', row.id, row)
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const toggleWordActive = async (row) => {
-    setSaving(`word-active-${row.id}`)
-    const next = !row.is_active
-    const { error } = await supabase.from('vocabulary_items').update({ is_active: next }).eq('id', row.id)
-    if (error) showToast(error.message, false)
-    else {
-      await writeAudit(next ? 'show_vocabulary_item' : 'hide_vocabulary_item', 'vocabulary_item', row.id, { is_active: next })
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const saveLesson = async () => {
-    if (!lessonForm.title.trim()) return showToast('Lesson title აუცილებელია', false)
-    setSaving('lesson')
-    const payload = {
-      title: lessonForm.title.trim(),
-      level: lessonForm.level || 'A1',
-      description: lessonForm.description || '',
-      order_index: Number(lessonForm.order_index || 0),
-      is_locked: Boolean(lessonForm.is_locked),
-      created_at: new Date().toISOString(),
-    }
-    let error
-    if (lessonEditId) {
-      ;({ error } = await supabase.from('lessons').update({ ...payload, created_at: undefined }).eq('id', lessonEditId))
-      await writeAudit('update_lesson', 'lesson', lessonEditId, payload)
-    } else {
-      ;({ error } = await supabase.from('lessons').insert(payload))
-      await writeAudit('create_lesson', 'lesson', payload.title, payload)
-    }
-    if (error) showToast(error.message, false)
-    else {
-      showToast(lessonEditId ? 'Lesson განახლდა' : 'Lesson დაემატა')
-      setLessonEditId(null)
-      setLessonForm(EMPTY_LESSON)
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const editLesson = (row) => {
-    setContentTab('lessons')
-    setLessonEditId(row.id)
-    setLessonForm({
-      title: row.title || '',
-      level: row.level || 'A1',
-      description: row.description || '',
-      order_index: row.order_index || 0,
-      is_locked: row.is_locked ?? false,
-    })
-  }
-
-  const removeLesson = async (row) => {
-    if (!confirm(`წაიშალოს lesson "${row.title}"?`)) return
-    setSaving(`lesson-del-${row.id}`)
-    const { error } = await supabase.from('lessons').delete().eq('id', row.id)
-    if (error) showToast(error.message, false)
-    else {
-      await writeAudit('delete_lesson', 'lesson', row.id, row)
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const toggleLessonLock = async (row) => {
-    setSaving(`lesson-lock-${row.id}`)
-    const next = !row.is_locked
-    const { error } = await supabase.from('lessons').update({ is_locked: next }).eq('id', row.id)
-    if (error) showToast(error.message, false)
-    else {
-      await writeAudit(next ? 'lock_lesson' : 'unlock_lesson', 'lesson', row.id, { is_locked: next })
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const saveSiteSetting = async (key, draft) => {
-    if (!key.trim()) return
-    setSaving(`setting-${key}`)
-    const value = parseJsonOrText(draft)
-    const { error } = await supabase.from('site_settings').upsert({ key, value, updated_by: user?.id || null, updated_at: new Date().toISOString() })
-    if (error) showToast(error.message, false)
-    else {
-      await writeAudit('set_site_setting', 'site_setting', key, { value })
-      showToast(`Setting "${key}" saved`)
-      await load()
-    }
-    setSaving(null)
-  }
-
-  const createNewSiteSetting = async () => {
-    if (!newSettingKey.trim()) return showToast('Key აუცილებელია', false)
-    await saveSiteSetting(newSettingKey.trim(), newSettingValue)
-    setNewSettingKey('')
-    setNewSettingValue('{\n  "enabled": false\n}')
-  }
-
-  const TABS = [
-    { id: 'users', icon: '👥', label: 'Users' },
-    { id: 'stats', icon: '📊', label: 'Stats' },
-    { id: 'chat', icon: '💬', label: 'Chat' },
-    { id: 'broadcast', icon: '📢', label: 'Broadcast' },
-    { id: 'content', icon: '🧩', label: 'Content' },
-  ]
-
-  const CONTENT_TABS = [
-    { id: 'grammar', icon: '📚', label: 'Grammar' },
-    { id: 'vocabulary', icon: '📝', label: 'Vocabulary' },
-    { id: 'lessons', icon: '🎓', label: 'Lessons' },
-    { id: 'settings', icon: '⚙️', label: 'Settings' },
-    { id: 'logs', icon: '🧾', label: 'Logs' },
-  ]
-
-  if (loading) {
-    return (
-      <div style={{ padding: 60, textAlign: 'center', color: C.ts, fontFamily: "'Inter',system-ui,sans-serif" }}>
-        იტვირთება...
-      </div>
-    )
-  }
+  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: C.ts, fontFamily: "'Inter',system-ui,sans-serif" }}>იტვირთება...</div>
 
   return (
     <div className="page-enter" style={{ padding: '14px 14px 24px', fontFamily: "'Inter',system-ui,sans-serif" }}>
-      {toast && (
-        <div
-          className="slide-up"
-          style={{
-            position: 'fixed',
-            top: 70,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 9999,
-            background: toast.ok ? C.g : C.r,
-            color: '#fff',
-            borderRadius: 12,
-            padding: '10px 20px',
-            fontWeight: 700,
-            fontSize: 13,
-            boxShadow: '0 4px 20px rgba(0,0,0,.3)',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {toast.msg}
-        </div>
-      )}
-
+      {toast && <div className="slide-up" style={{ position: 'fixed', top: 70, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: toast.ok ? C.g : C.r, color: '#fff', borderRadius: 12, padding: '10px 20px', fontWeight: 700, fontSize: 13, boxShadow: '0 4px 20px rgba(0,0,0,.3)', whiteSpace: 'nowrap' }}>{toast.msg}</div>}
       <div style={{ color: C.t, fontWeight: 800, fontSize: 20, marginBottom: 4 }}>⚙️ ადმინ პანელი</div>
-      <div style={{ color: C.ts, fontSize: 11, marginBottom: 16 }}>
-        👥 {profiles.length} მომხ. · ⚡ {stats?.totalXP?.toLocaleString?.() || 0} XP სულ · 💬 {stats?.totalMsgs || 0} შეტყობინება · 🧩 {topics.length} თემები
-      </div>
+      <div style={{ color: C.ts, fontSize: 11, marginBottom: 16 }}>👥 {profiles.length} მომხ. · ⚡ {stats?.totalXP?.toLocaleString?.() || 0} XP სულ · 💬 {stats?.totalMsgs || 0} შეტყობინება · 🧩 {topics.length} თემები</div>
+      <div style={{ display: 'flex', background: C.card3, borderRadius: 12, padding: 4, marginBottom: 16, gap: 3, flexWrap: 'wrap' }}>{TABS.map(t => <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, minWidth: 70, padding: '8px 2px', background: tab === t.id ? C.a : 'transparent', border: 'none', borderRadius: 9, cursor: 'pointer', color: tab === t.id ? '#fff' : C.ts, fontSize: 10, fontWeight: tab === t.id ? 700 : 400, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontFamily: 'inherit' }}><span style={{ fontSize: 14 }}>{t.icon}</span><span>{t.label}</span></button>)}</div>
 
-      <div style={{ display: 'flex', background: C.card3, borderRadius: 12, padding: 4, marginBottom: 16, gap: 3 }}>
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              flex: 1,
-              padding: '8px 2px',
-              background: tab === t.id ? C.a : 'transparent',
-              border: 'none',
-              borderRadius: 9,
-              cursor: 'pointer',
-              color: tab === t.id ? '#fff' : C.ts,
-              fontSize: 10,
-              fontWeight: tab === t.id ? 700 : 400,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 2,
-              fontFamily: 'inherit',
-            }}
-          >
-            <span style={{ fontSize: 14 }}>{t.icon}</span>
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {tab === 'users' && (
-        <div>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="🔍 მომხმარებლის ძებნა..."
-            style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 14px', color: C.t, fontSize: 13, marginBottom: 12, outline: 'none', fontFamily: 'inherit' }}
-          />
-
-          {filtProfiles.map(p => {
-            const isEdit = editId === p.id
-            return (
-              <div key={p.id} style={{ ...gls({ padding: '12px 14px' }), marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isEdit ? 12 : 0 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, overflow: 'hidden', border: `2px solid ${p.is_admin ? C.gold : p.chat_blocked ? C.r : C.bdL}`, background: C.card3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ color: C.a, fontWeight: 800, fontSize: 14 }}>{p.username.slice(0, 2).toUpperCase()}</span>}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                      <span style={{ color: C.t, fontWeight: 700, fontSize: 14 }}>{p.username}</span>
-                      {p.is_admin && <Badge tone="gold">ADMIN</Badge>}
-                      {p.chat_blocked && <Badge tone="red">BLOCKED</Badge>}
-                      {p.account_hidden && <Badge tone="blue">HIDDEN</Badge>}
-                      {p.deleted_at && <Badge tone="neutral">DELETED</Badge>}
-                    </div>
-                    <div style={{ color: C.ts, fontSize: 10, marginTop: 1 }}>
-                      ⚡{p.xp || 0} XP · 🔥{p.streak || 0} · {LANG_FLAG[p.current_lang] || '🌐'} · {new Date(p.created_at).toLocaleDateString('ka-GE')}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => { setEditId(isEdit ? null : p.id); setEditXP(String(p.xp || 0)); setEditStreak(String(p.streak || 0)) }}
-                    style={{ background: isEdit ? `${C.a}22` : C.card3, border: `1px solid ${isEdit ? C.a : C.bdL}`, borderRadius: 8, padding: '5px 10px', color: isEdit ? C.a : C.ts, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
-                  >
-                    {isEdit ? '✕' : '✏️'}
-                  </button>
-                </div>
-
-                {isEdit && (
-                  <div style={{ borderTop: `1px solid ${C.bdL}`, paddingTop: 12 }}>
-                    <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ color: C.ts, fontSize: 10, marginBottom: 3 }}>⚡ XP</div>
-                        <input type="number" value={editXP} onChange={e => setEditXP(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 8, padding: '8px 10px', color: C.t, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ color: C.ts, fontSize: 10, marginBottom: 3 }}>🔥 Streak</div>
-                        <input type="number" value={editStreak} onChange={e => setEditStreak(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 8, padding: '8px 10px', color: C.t, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                      <ActionButton onClick={() => saveXP(p)} disabled={saving === `xp-${p.id}`} style={{ flex: 1 }}>{saving === `xp-${p.id}` ? '...' : '💾 XP'}</ActionButton>
-                      <ActionButton onClick={() => saveStreak(p)} disabled={saving === `st-${p.id}`} style={{ flex: 1, background: 'rgba(245,158,11,0.18)', color: '#d97706', border: '1px solid rgba(245,158,11,0.24)' }}>{saving === `st-${p.id}` ? '...' : '💾 Streak'}</ActionButton>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                      <ActionButton tone={p.is_admin ? 'danger' : 'muted'} onClick={() => toggleAdmin(p)} disabled={saving === `adm-${p.id}`}>{p.is_admin ? '👑 Admin off' : '👑 Admin on'}</ActionButton>
-                      <ActionButton tone={p.chat_blocked ? 'muted' : 'danger'} onClick={() => toggleBlock(p)} disabled={saving === `blk-${p.id}`}>{p.chat_blocked ? '✅ Unblock' : '🚫 Block chat'}</ActionButton>
-                      <ActionButton tone={p.account_hidden ? 'muted' : 'danger'} onClick={() => toggleHidden(p)} disabled={saving === `hid-${p.id}`}>{p.account_hidden ? '👁️ Show' : '🙈 Hide'}</ActionButton>
-                      <ActionButton tone={p.deleted_at ? 'muted' : 'danger'} onClick={() => (p.deleted_at ? restoreUser(p) : softDeleteUser(p))} disabled={saving === `del-${p.id}` || saving === `res-${p.id}`}>{p.deleted_at ? '♻️ Restore' : '🗑️ Soft delete'}</ActionButton>
-                    </div>
-                    <button onClick={() => deleteUserMsgs(p)} style={{ width: '100%', marginTop: 6, background: `${C.r}11`, border: `1px solid ${C.r}33`, borderRadius: 8, padding: '7px 0', color: C.r, fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
-                      🗑️ {p.username}-ს ყველა შეტყობინება წაიშალოს
-                    </button>
-                  </div>
-                )}
+      {tab === 'users' && <div>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 მომხმარებლის ძებნა..." style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 14px', color: C.t, fontSize: 13, marginBottom: 12, outline: 'none', fontFamily: 'inherit' }} />
+        {filtProfiles.map(p => { const isEdit = editId === p.id; return <div key={p.id} style={{ ...gls({ padding: '12px 14px' }), marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isEdit ? 12 : 0 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, overflow: 'hidden', border: `2px solid ${p.is_admin ? C.gold : p.chat_blocked ? C.r : C.bdL}`, background: C.card3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ color: C.a, fontWeight: 800, fontSize: 14 }}>{p.username.slice(0, 2).toUpperCase()}</span>}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                <span style={{ color: C.t, fontWeight: 700, fontSize: 14 }}>{p.username}</span>
+                {p.is_admin && <Badge tone="gold">ADMIN</Badge>}
+                {p.chat_blocked && <Badge tone="red">BLOCKED</Badge>}
+                {p.account_hidden && <Badge tone="blue">HIDDEN</Badge>}
+                {p.deleted_at && <Badge tone="neutral">DELETED</Badge>}
               </div>
-            )
-          })}
-        </div>
-      )}
-
-      {tab === 'stats' && stats && (
-        <div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-            {[
-              { icon: '👥', label: 'მომხმარებელი', val: stats.totalUsers, col: C.a },
-              { icon: '⚡', label: 'სულ XP', val: stats.totalXP.toLocaleString(), col: C.gold },
-              { icon: '📅', label: 'სესიები', val: stats.totalSessions.toLocaleString(), col: C.p },
-              { icon: '🔥', label: 'აქტიური', val: stats.activeToday, col: C.o },
-              { icon: '💬', label: 'შეტყობინება', val: stats.totalMsgs, col: C.g },
-              { icon: '🚫', label: 'დაბლოკილი', val: stats.blockedCount, col: C.r },
-              { icon: '🧩', label: 'Grammar თემები', val: topics.length, col: C.a },
-              { icon: '📝', label: 'Exercises', val: exercises.length, col: C.p },
-            ].map(s => (
-              <div key={s.label} className="pop-in" style={{ ...gls({ padding: '14px 12px' }), textAlign: 'center' }}>
-                <div style={{ fontSize: 22, marginBottom: 4 }}>{s.icon}</div>
-                <div style={{ color: s.col, fontWeight: 900, fontSize: 20 }}>{s.val}</div>
-                <div style={{ color: C.ts, fontSize: 10 }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ ...gls({ padding: '14px' }), marginBottom: 12 }}>
-            <div style={{ color: C.t, fontWeight: 700, fontSize: 13, marginBottom: 10 }}>🌍 ენების განაწილება</div>
-            {Object.entries(stats.byLang || {}).sort((a, b) => b[1] - a[1]).map(([l, n]) => (
-              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 16, width: 24 }}>{LANG_FLAG[l] || '🌐'}</span>
-                <span style={{ color: C.t, fontSize: 13, flex: 1, textTransform: 'capitalize' }}>{l}</span>
-                <span style={{ color: C.a, fontWeight: 700, fontSize: 13 }}>{n}</span>
-                <div style={{ width: 60, height: 5, background: C.card3, borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', borderRadius: 3, background: C.a, width: `${Math.round((n / stats.totalUsers) * 100)}%`, transition: 'width .5s' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ ...gls({ padding: '14px' }) }}>
-            <div style={{ color: C.t, fontWeight: 700, fontSize: 13, marginBottom: 10 }}>🏆 Top 5 XP</div>
-            {[...profiles].sort((a, b) => (b.xp || 0) - (a.xp || 0)).slice(0, 5).map((p, i) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ width: 20, fontSize: 13 }}>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}</span>
-                <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: C.card3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: C.a }}>
-                  {p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.username.slice(0, 2).toUpperCase()}
-                </div>
-                <span style={{ flex: 1, color: C.t, fontSize: 13 }}>{p.username}</span>
-                <span style={{ color: C.gold, fontWeight: 700, fontSize: 13 }}>{(p.xp || 0).toLocaleString()} XP</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {tab === 'chat' && (
-        <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-            <input value={chatSearch} onChange={e => setChatSearch(e.target.value)} placeholder="🔍 ფილტრი მომხმ.-ით ან ტექსტით..." style={{ flex: 1, background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '9px 12px', color: C.t, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
-            <button onClick={() => { if (confirm('ყველა გაიწმინდოს?')) supabase.from('chat_messages').delete().gte('created_at', '1970-01-01').then(() => { setChatMsgs([]); showToast('ჩათი წაიშალა', false) }) }} style={{ background: `${C.r}22`, border: `1px solid ${C.r}44`, borderRadius: 10, padding: '9px 12px', color: C.r, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>
-              🗑️ ყველა
-            </button>
-          </div>
-          <div style={{ color: C.ts, fontSize: 11, marginBottom: 8 }}>{filtMsgs.length} შეტყობინება {chatSearch ? `"${chatSearch}"-ისგან` : ''}</div>
-          {filtMsgs.map(m => (
-            <div key={m.id} style={{ background: C.card2, borderRadius: 10, padding: '8px 12px', marginBottom: 5, borderLeft: `3px solid ${m.is_bot ? C.a : C.bdL}`, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                  <span style={{ color: m.is_bot ? C.a : C.t, fontWeight: 700, fontSize: 11 }}>{m.username}</span>
-                  <span style={{ color: C.tm, fontSize: 9 }}>{new Date(m.created_at).toLocaleTimeString('ka-GE', { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-                <div style={{ color: C.ts, fontSize: 12, lineHeight: 1.4, wordBreak: 'break-word' }}>{m.text}</div>
-              </div>
-              <button onClick={() => deleteMsg(m.id)} style={{ background: `${C.r}22`, border: `1px solid ${C.r}33`, borderRadius: 6, padding: '3px 7px', color: C.r, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
-                ✕
-              </button>
+              <div style={{ color: C.ts, fontSize: 10, marginTop: 1 }}>⚡{p.xp || 0} XP · 🔥{p.streak || 0} · {LANG_FLAG[p.current_lang] || '🌐'} · {new Date(p.created_at).toLocaleDateString('ka-GE')}</div>
             </div>
-          ))}
-          {filtMsgs.length === 0 && <div style={{ textAlign: 'center', color: C.ts, paddingTop: 30 }}>შეტყობინება არ არის</div>}
-        </div>
-      )}
-
-      {tab === 'broadcast' && (
-        <div>
-          <div style={{ ...gls({ padding: 16 }), marginBottom: 12 }}>
-            <div style={{ color: C.t, fontWeight: 700, fontSize: 14, marginBottom: 4 }}>📢 Broadcast შეტყობინება</div>
-            <div style={{ color: C.ts, fontSize: 11, marginBottom: 12 }}>ეს შეტყობინება ყველა ენის ჩათში გამოჩნდება ადმინის სახელით</div>
-            <textarea value={broadcast} onChange={e => setBroadcast(e.target.value)} placeholder="შეიყვანე შეტყობინება..." rows={4} style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '12px 14px', color: C.t, fontSize: 14, resize: 'vertical', outline: 'none', fontFamily: 'inherit', marginBottom: 10 }} />
-            <button onClick={sendBroadcast} disabled={!broadcast.trim() || saving === 'broadcast'} style={{ width: '100%', background: `linear-gradient(135deg,${C.a},${C.p})`, border: 'none', borderRadius: 12, padding: '13px 0', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', opacity: !broadcast.trim() || saving === 'broadcast' ? 0.55 : 1 }}>
-              {saving === 'broadcast' ? 'იგზავნება...' : '📢 გაგზავნა ყველასთვის'}
-            </button>
+            <button onClick={() => { setEditId(isEdit ? null : p.id); setEditXP(String(p.xp || 0)); setEditStreak(String(p.streak || 0)) }} style={{ background: isEdit ? `${C.a}22` : C.card3, border: `1px solid ${isEdit ? C.a : C.bdL}`, borderRadius: 8, padding: '5px 10px', color: isEdit ? C.a : C.ts, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>{isEdit ? '✕' : '✏️'}</button>
           </div>
+          {isEdit && <div style={{ borderTop: `1px solid ${C.bdL}`, paddingTop: 12 }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}><div style={{ flex: 1 }}><div style={{ color: C.ts, fontSize: 10, marginBottom: 3 }}>⚡ XP</div><input type="number" value={editXP} onChange={e => setEditXP(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 8, padding: '8px 10px', color: C.t, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} /></div><div style={{ flex: 1 }}><div style={{ color: C.ts, fontSize: 10, marginBottom: 3 }}>🔥 Streak</div><input type="number" value={editStreak} onChange={e => setEditStreak(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 8, padding: '8px 10px', color: C.t, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} /></div></div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}><Btn onClick={() => saveXP(p)} disabled={saving === `xp-${p.id}`} style={{ flex: 1 }}>{saving === `xp-${p.id}` ? '...' : '💾 XP'}</Btn><Btn onClick={() => saveStreak(p)} disabled={saving === `st-${p.id}`} style={{ flex: 1, background: 'rgba(245,158,11,0.18)', color: '#d97706', border: '1px solid rgba(245,158,11,0.24)' }}>{saving === `st-${p.id}` ? '...' : '💾 Streak'}</Btn></div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}><Btn tone={p.is_admin ? 'danger' : 'muted'} onClick={() => toggleAdmin(p)} disabled={saving === `adm-${p.id}`}>{p.is_admin ? '👑 Admin off' : '👑 Admin on'}</Btn><Btn tone={p.chat_blocked ? 'muted' : 'danger'} onClick={() => toggleBlock(p)} disabled={saving === `blk-${p.id}`}>{p.chat_blocked ? '✅ Unblock' : '🚫 Block chat'}</Btn><Btn tone={p.account_hidden ? 'muted' : 'danger'} onClick={() => toggleHidden(p)} disabled={saving === `hid-${p.id}`}>{p.account_hidden ? '👁️ Show' : '🙈 Hide'}</Btn><Btn tone={p.deleted_at ? 'muted' : 'danger'} onClick={() => (p.deleted_at ? restoreUser(p) : softDeleteUser(p))} disabled={saving === `del-${p.id}` || saving === `res-${p.id}`}>{p.deleted_at ? '♻️ Restore' : '🗑️ Soft delete'}</Btn></div>
+            <button onClick={() => deleteUserMsgs(p)} style={{ width: '100%', marginTop: 6, background: `${C.r}11`, border: `1px solid ${C.r}33`, borderRadius: 8, padding: '7px 0', color: C.r, fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>🗑️ {p.username}-ს ყველა შეტყობინება წაიშალოს</button>
+          </div>}
+        </div>})}
+      </div>}
 
-          <div style={{ ...gls({ padding: 14 }) }}>
-            <div style={{ color: C.t, fontWeight: 700, fontSize: 13, marginBottom: 10 }}>⚡ სწრაფი შეტყობინებები</div>
-            {[
-              '🚀 LinguaMaster-ი განახლდა! ახალი ფუნქციები ხელმისაწვდომია.',
-              '🔧 ტექნიკური სამუშაო მიმდინარეობს. მოგვიანებით სცადეთ.',
-              '🏆 ახალი კვირა — ახალი შესაძლებლობა! სწავლა გააგრძელეთ!',
-              '🎉 გილოცავთ ყველა აქტიურ სტუდენტს!',
-            ].map(t => (
-              <button key={t} onClick={() => setBroadcast(t)} style={{ width: '100%', textAlign: 'left', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.ts, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 6, lineHeight: 1.4 }}>
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {tab === 'stats' && stats && <div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>{[{ icon: '👥', label: 'მომხმარებელი', val: stats.totalUsers, col: C.a }, { icon: '⚡', label: 'სულ XP', val: stats.totalXP.toLocaleString(), col: C.gold }, { icon: '📅', label: 'სესიები', val: stats.totalSessions.toLocaleString(), col: C.p }, { icon: '🔥', label: 'აქტიური', val: stats.activeToday, col: C.o }, { icon: '💬', label: 'შეტყობინება', val: stats.totalMsgs, col: C.g }, { icon: '🚫', label: 'დაბლოკილი', val: stats.blockedCount, col: C.r }, { icon: '🧩', label: 'Grammar თემები', val: topics.length, col: C.a }, { icon: '📝', label: 'Exercises', val: exercises.length, col: C.p }].map(s => <div key={s.label} className="pop-in" style={{ ...gls({ padding: '14px 12px' }), textAlign: 'center' }}><div style={{ fontSize: 22, marginBottom: 4 }}>{s.icon}</div><div style={{ color: s.col, fontWeight: 900, fontSize: 20 }}>{s.val}</div><div style={{ color: C.ts, fontSize: 10 }}>{s.label}</div></div>)}</div>
+        <div style={{ ...gls({ padding: '14px' }), marginBottom: 12 }}><div style={{ color: C.t, fontWeight: 700, fontSize: 13, marginBottom: 10 }}>🌍 ენების განაწილება</div>{Object.entries(stats.byLang || {}).sort((a, b) => b[1] - a[1]).map(([l, n]) => <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}><span style={{ fontSize: 16, width: 24 }}>{LANG_FLAG[l] || '🌐'}</span><span style={{ color: C.t, fontSize: 13, flex: 1, textTransform: 'capitalize' }}>{l}</span><span style={{ color: C.a, fontWeight: 700, fontSize: 13 }}>{n}</span><div style={{ width: 60, height: 5, background: C.card3, borderRadius: 3, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 3, background: C.a, width: `${Math.round((n / stats.totalUsers) * 100)}%`, transition: 'width .5s' }} /></div></div>)}</div>
+        <div style={{ ...gls({ padding: '14px' }) }}><div style={{ color: C.t, fontWeight: 700, fontSize: 13, marginBottom: 10 }}>🏆 Top 5 XP</div>{[...profiles].sort((a, b) => (b.xp || 0) - (a.xp || 0)).slice(0, 5).map((p, i) => <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}><span style={{ width: 20, fontSize: 13 }}>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}</span><div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: C.card3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: C.a }}>{p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.username.slice(0, 2).toUpperCase()}</div><span style={{ flex: 1, color: C.t, fontSize: 13 }}>{p.username}</span><span style={{ color: C.gold, fontWeight: 700, fontSize: 13 }}>{(p.xp || 0).toLocaleString()} XP</span></div>)}</div>
+      </div>}
 
-      {tab === 'content' && (
-        <div>
-          <div style={{ display: 'flex', background: C.card3, borderRadius: 12, padding: 4, marginBottom: 12, gap: 3, flexWrap: 'wrap' }}>
-            {CONTENT_TABS.map(t => (
-              <button key={t.id} onClick={() => setContentTab(t.id)} style={{ flex: 1, minWidth: 88, padding: '8px 6px', background: contentTab === t.id ? C.a : 'transparent', border: 'none', borderRadius: 9, cursor: 'pointer', color: contentTab === t.id ? '#fff' : C.ts, fontSize: 10, fontWeight: contentTab === t.id ? 700 : 400, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontFamily: 'inherit' }}>
-                <span style={{ fontSize: 14 }}>{t.icon}</span><span>{t.label}</span>
-              </button>
-            ))}
-          </div>
+      {tab === 'chat' && <div><div style={{ display: 'flex', gap: 8, marginBottom: 10 }}><input value={chatSearch} onChange={e => setChatSearch(e.target.value)} placeholder="🔍 ფილტრი მომხმ.-ით ან ტექსტით..." style={{ flex: 1, background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '9px 12px', color: C.t, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} /><button onClick={() => { if (confirm('ყველა გაიწმინდოს?')) supabase.from('chat_messages').delete().gte('created_at', '1970-01-01').then(() => { setChatMsgs([]); showToast('ჩათი წაიშალა', false) }) }} style={{ background: `${C.r}22`, border: `1px solid ${C.r}44`, borderRadius: 10, padding: '9px 12px', color: C.r, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>🗑️ ყველა</button></div><div style={{ color: C.ts, fontSize: 11, marginBottom: 8 }}>{filtMsgs.length} შეტყობინება {chatSearch ? `"${chatSearch}"-ისგან` : ''}</div>{filtMsgs.map(m => <div key={m.id} style={{ background: C.card2, borderRadius: 10, padding: '8px 12px', marginBottom: 5, borderLeft: `3px solid ${m.is_bot ? C.a : C.bdL}`, display: 'flex', gap: 8, alignItems: 'flex-start' }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}><span style={{ color: m.is_bot ? C.a : C.t, fontWeight: 700, fontSize: 11 }}>{m.username}</span><span style={{ color: C.tm, fontSize: 9 }}>{new Date(m.created_at).toLocaleTimeString('ka-GE', { hour: '2-digit', minute: '2-digit' })}</span></div><div style={{ color: C.ts, fontSize: 12, lineHeight: 1.4, wordBreak: 'break-word' }}>{m.text}</div></div><button onClick={() => deleteMsg(m.id)} style={{ background: `${C.r}22`, border: `1px solid ${C.r}33`, borderRadius: 6, padding: '3px 7px', color: C.r, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>✕</button></div>)}{filtMsgs.length === 0 && <div style={{ textAlign: 'center', color: C.ts, paddingTop: 30 }}>შეტყობინება არ არის</div>}</div>}
 
-          <input value={contentSearch} onChange={e => setContentSearch(e.target.value)} placeholder="🔍 search content..." style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 14px', color: C.t, fontSize: 13, marginBottom: 12, outline: 'none', fontFamily: 'inherit' }} />
+      {tab === 'broadcast' && <div><div style={{ ...gls({ padding: 16 }), marginBottom: 12 }}><div style={{ color: C.t, fontWeight: 700, fontSize: 14, marginBottom: 4 }}>📢 Broadcast შეტყობინება</div><div style={{ color: C.ts, fontSize: 11, marginBottom: 12 }}>ეს შეტყობინება ყველა ენის ჩათში გამოჩნდება ადმინის სახელით</div><textarea value={broadcast} onChange={e => setBroadcast(e.target.value)} placeholder="შეიყვანე შეტყობინება..." rows={4} style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '12px 14px', color: C.t, fontSize: 14, resize: 'vertical', outline: 'none', fontFamily: 'inherit', marginBottom: 10 }} /><button onClick={sendBroadcast} disabled={!broadcast.trim() || saving === 'broadcast'} style={{ width: '100%', background: `linear-gradient(135deg,${C.a},${C.p})`, border: 'none', borderRadius: 12, padding: '13px 0', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', opacity: !broadcast.trim() || saving === 'broadcast' ? 0.55 : 1 }}>{saving === 'broadcast' ? 'იგზავნება...' : '📢 გაგზავნა ყველასთვის'}</button></div><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 700, fontSize: 13, marginBottom: 10 }}>⚡ სწრაფი შეტყობინებები</div>{['🚀 LinguaMaster-ი განახლდა! ახალი ფუნქციები ხელმისაწვდომია.', '🔧 ტექნიკური სამუშაო მიმდინარეობს. მოგვიანებით სცადეთ.', '🏆 ახალი კვირა — ახალი შესაძლებლობა! სწავლა გააგრძელეთ!', '🎉 გილოცავთ ყველა აქტიურ სტუდენტს!'].map(t => <button key={t} onClick={() => setBroadcast(t)} style={{ width: '100%', textAlign: 'left', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.ts, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 6, lineHeight: 1.4 }}>{t}</button>)}</div></div>}
 
-          {contentTab === 'grammar' && (
-            <div style={{ display: 'grid', gap: 12 }}>
-              <div style={{ ...gls({ padding: 14 }) }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>{topicEditId ? '✏️ Edit Grammar Topic' : '➕ Add Grammar Topic'}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
-                  <Field label="Level"><select value={topicForm.level} onChange={e => setTopicForm(prev => ({ ...prev, level: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{LEVELS.map(l => <option key={l}>{l}</option>)}</select></Field>
-                  <Field label="Category"><input value={topicForm.category} onChange={e => setTopicForm(prev => ({ ...prev, category: e.target.value }))} placeholder="Artikel & Genus" style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Title"><input value={topicForm.title} onChange={e => setTopicForm(prev => ({ ...prev, title: e.target.value }))} placeholder="Präsens" style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Order"><input type="number" value={topicForm.order_index} onChange={e => setTopicForm(prev => ({ ...prev, order_index: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Description" hint="short explanation"><textarea value={topicForm.description} onChange={e => setTopicForm(prev => ({ ...prev, description: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field>
-                  <Field label="Active"><label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={topicForm.is_active} onChange={e => setTopicForm(prev => ({ ...prev, is_active: e.target.checked }))} /> <span style={{ color: C.ts, fontSize: 12 }}>{topicForm.is_active ? 'Visible' : 'Hidden'}</span></label></Field>
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <ActionButton onClick={saveTopic} disabled={saving === 'topic'}>{saving === 'topic' ? 'Saving...' : topicEditId ? '💾 Update topic' : '➕ Create topic'}</ActionButton>
-                  <ActionButton tone="muted" onClick={() => { setTopicEditId(null); setTopicForm(EMPTY_TOPIC) }}>Reset</ActionButton>
-                </div>
-              </div>
+      {tab === 'content' && <div><div style={{ display: 'flex', background: C.card3, borderRadius: 12, padding: 4, marginBottom: 12, gap: 3, flexWrap: 'wrap' }}>{SUBTABS.map(t => <button key={t.id} onClick={() => setContentTab(t.id)} style={{ flex: 1, minWidth: 88, padding: '8px 6px', background: contentTab === t.id ? C.a : 'transparent', border: 'none', borderRadius: 9, cursor: 'pointer', color: contentTab === t.id ? '#fff' : C.ts, fontSize: 10, fontWeight: contentTab === t.id ? 700 : 400, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontFamily: 'inherit' }}><span style={{ fontSize: 14 }}>{t.icon}</span><span>{t.label}</span></button>)}</div><input value={contentSearch} onChange={e => setContentSearch(e.target.value)} placeholder="🔍 search content..." style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 14px', color: C.t, fontSize: 13, marginBottom: 12, outline: 'none', fontFamily: 'inherit' }} />
 
-              <div style={{ ...gls({ padding: 14 }) }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Grammar topics ({filteredTopics.length})</div>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {filteredTopics.map(row => (
-                    <div key={row.id} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${row.is_active ? C.bdL : C.r}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                        <div>
-                          <div style={{ color: C.t, fontWeight: 800 }}>{row.level} · {row.title}</div>
-                          <div style={{ color: C.ts, fontSize: 12, marginTop: 3 }}>{row.category || 'No category'} · #{row.order_index ?? 0}</div>
-                          {row.description ? <div style={{ color: C.ts, fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{row.description}</div> : null}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                          <Badge tone={row.is_active ? 'green' : 'red'}>{row.is_active ? 'active' : 'hidden'}</Badge>
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            <ActionButton tone="muted" onClick={() => editTopic(row)}>Edit</ActionButton>
-                            <ActionButton tone="muted" onClick={() => toggleTopicActive(row)} disabled={saving === `topic-active-${row.id}`}>{row.is_active ? 'Hide' : 'Show'}</ActionButton>
-                            <ActionButton tone="danger" onClick={() => removeTopic(row)} disabled={saving === `topic-del-${row.id}`}>Delete</ActionButton>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {filteredTopics.length === 0 && <div style={{ color: C.ts, fontSize: 12 }}>No topics found.</div>}
-                </div>
-              </div>
+        {contentTab === 'grammar' && <div style={{ display: 'grid', gap: 12 }}><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>{topicEditId ? '✏️ Edit Grammar Topic' : '➕ Add Grammar Topic'}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}><Field label="Level"><select value={topicForm.level} onChange={e => setTopicForm(prev => ({ ...prev, level: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{LEVELS.map(l => <option key={l}>{l}</option>)}</select></Field><Field label="Category"><input value={topicForm.category} onChange={e => setTopicForm(prev => ({ ...prev, category: e.target.value }))} placeholder="Artikel & Genus" style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Title"><input value={topicForm.title} onChange={e => setTopicForm(prev => ({ ...prev, title: e.target.value }))} placeholder="Präsens" style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Order"><input type="number" value={topicForm.order_index} onChange={e => setTopicForm(prev => ({ ...prev, order_index: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Description" hint="short explanation"><textarea value={topicForm.description} onChange={e => setTopicForm(prev => ({ ...prev, description: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field><Field label="Active"><label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={topicForm.is_active} onChange={e => setTopicForm(prev => ({ ...prev, is_active: e.target.checked }))} /> <span style={{ color: C.ts, fontSize: 12 }}>{topicForm.is_active ? 'Visible' : 'Hidden'}</span></label></Field></div><div style={{ display: 'flex', gap: 8, marginTop: 10 }}><Btn onClick={saveTopic} disabled={saving === 'topic'}>{saving === 'topic' ? 'Saving...' : topicEditId ? '💾 Update topic' : '➕ Create topic'}</Btn><Btn tone="muted" onClick={() => { setTopicEditId(null); setTopicForm(EMPTY_TOPIC) }}>Reset</Btn></div></div><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Grammar topics ({filteredTopics.length})</div><div style={{ display: 'grid', gap: 8 }}>{filteredTopics.map(row => <div key={row.id} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${row.is_active ? C.bdL : C.r}` }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><div><div style={{ color: C.t, fontWeight: 800 }}>{row.level} · {row.title}</div><div style={{ color: C.ts, fontSize: 12, marginTop: 3 }}>{row.category || 'No category'} · #{row.order_index ?? 0}</div>{row.description ? <div style={{ color: C.ts, fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{row.description}</div> : null}</div><div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}><Badge tone={row.is_active ? 'green' : 'red'}>{row.is_active ? 'active' : 'hidden'}</Badge><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}><Btn tone="muted" onClick={() => editTopic(row)}>Edit</Btn><Btn tone="muted" onClick={() => toggleTopicActive(row)} disabled={saving === `topic-active-${row.id}`}>{row.is_active ? 'Hide' : 'Show'}</Btn><Btn tone="danger" onClick={() => removeTopic(row)} disabled={saving === `topic-del-${row.id}`}>Delete</Btn></div></div></div></div>)}{filteredTopics.length === 0 && <div style={{ color: C.ts, fontSize: 12 }}>No topics found.</div>}</div></div><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>{exerciseEditId ? '✏️ Edit Exercise' : '➕ Add Exercise'}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}><Field label="Topic"><select value={exerciseForm.topic_id} onChange={e => setExerciseForm(prev => ({ ...prev, topic_id: e.target.value, level: topicMap[e.target.value]?.level || prev.level }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{topics.map(t => <option key={t.id} value={t.id}>{t.level} · {t.title}</option>)}</select></Field><Field label="Level"><select value={exerciseForm.level} onChange={e => setExerciseForm(prev => ({ ...prev, level: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{LEVELS.map(l => <option key={l}>{l}</option>)}</select></Field><Field label="Exercise type"><select value={exerciseForm.exercise_type} onChange={e => setExerciseForm(prev => ({ ...prev, exercise_type: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{EX_TYPES.map(t => <option key={t}>{t}</option>)}</select></Field><Field label="XP reward"><input type="number" value={exerciseForm.xp_reward} onChange={e => setExerciseForm(prev => ({ ...prev, xp_reward: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Question"><textarea value={exerciseForm.question} onChange={e => setExerciseForm(prev => ({ ...prev, question: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field><Field label="Options JSON" hint='e.g. ["Der", "Die", "Das"]'><textarea value={exerciseForm.optionsText} onChange={e => setExerciseForm(prev => ({ ...prev, optionsText: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field><Field label="Correct answer"><input value={exerciseForm.correct_answer} onChange={e => setExerciseForm(prev => ({ ...prev, correct_answer: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Active"><label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={exerciseForm.is_active} onChange={e => setExerciseForm(prev => ({ ...prev, is_active: e.target.checked }))} /> <span style={{ color: C.ts, fontSize: 12 }}>{exerciseForm.is_active ? 'Visible' : 'Hidden'}</span></label></Field><Field label="Explanation"><textarea value={exerciseForm.explanation} onChange={e => setExerciseForm(prev => ({ ...prev, explanation: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field></div><div style={{ display: 'flex', gap: 8, marginTop: 10 }}><Btn onClick={saveExercise} disabled={saving === 'exercise'}>{saving === 'exercise' ? 'Saving...' : exerciseEditId ? '💾 Update exercise' : '➕ Create exercise'}</Btn><Btn tone="muted" onClick={() => { setExerciseEditId(null); setExerciseForm(prev => ({ ...EMPTY_EX, topic_id: prev.topic_id || topics[0]?.id || '', level: topicMap[prev.topic_id]?.level || 'A1' })) }}>Reset</Btn></div></div><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Exercises ({filteredExercises.length})</div><div style={{ display: 'grid', gap: 8 }}>{filteredExercises.map(row => { const topic = topicMap[row.topic_id]; return <div key={row.id} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${row.is_active ? C.bdL : C.r}` }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><div style={{ minWidth: 0 }}><div style={{ color: C.t, fontWeight: 800 }}>{row.level} · {row.exercise_type}</div><div style={{ color: C.ts, fontSize: 12, marginTop: 4 }}>{topic ? `${topic.category || ''} · ${topic.title}` : row.topic_id}</div><div style={{ color: C.t, fontSize: 12, marginTop: 8, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{row.question}</div><div style={{ color: C.ts, fontSize: 11, marginTop: 6 }}>Answer: {row.correct_answer} · XP {row.xp_reward || 0}</div></div><div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}><Badge tone={row.is_active ? 'green' : 'red'}>{row.is_active ? 'active' : 'hidden'}</Badge><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}><Btn tone="muted" onClick={() => editExercise(row)}>Edit</Btn><Btn tone="muted" onClick={() => toggleExerciseActive(row)} disabled={saving === `exercise-active-${row.id}`}>{row.is_active ? 'Hide' : 'Show'}</Btn><Btn tone="danger" onClick={() => removeExercise(row)} disabled={saving === `exercise-del-${row.id}`}>Delete</Btn></div></div></div></div> })}{filteredExercises.length === 0 && <div style={{ color: C.ts, fontSize: 12 }}>No exercises found.</div>}</div></div></div>}
 
-              <div style={{ ...gls({ padding: 14 }) }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>{exerciseEditId ? '✏️ Edit Exercise' : '➕ Add Exercise'}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
-                  <Field label="Topic"><select value={exerciseForm.topic_id} onChange={e => setExerciseForm(prev => ({ ...prev, topic_id: e.target.value, level: topicMap[e.target.value]?.level || prev.level }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{topics.map(t => <option key={t.id} value={t.id}>{t.level} · {t.title}</option>)}</select></Field>
-                  <Field label="Level"><select value={exerciseForm.level} onChange={e => setExerciseForm(prev => ({ ...prev, level: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{LEVELS.map(l => <option key={l}>{l}</option>)}</select></Field>
-                  <Field label="Exercise type"><select value={exerciseForm.exercise_type} onChange={e => setExerciseForm(prev => ({ ...prev, exercise_type: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{EXERCISE_TYPES.map(t => <option key={t}>{t}</option>)}</select></Field>
-                  <Field label="XP reward"><input type="number" value={exerciseForm.xp_reward} onChange={e => setExerciseForm(prev => ({ ...prev, xp_reward: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Question"><textarea value={exerciseForm.question} onChange={e => setExerciseForm(prev => ({ ...prev, question: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field>
-                  <Field label="Options JSON" hint='e.g. ["Der", "Die", "Das"]'><textarea value={exerciseForm.optionsText} onChange={e => setExerciseForm(prev => ({ ...prev, optionsText: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field>
-                  <Field label="Correct answer"><input value={exerciseForm.correct_answer} onChange={e => setExerciseForm(prev => ({ ...prev, correct_answer: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Active"><label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={exerciseForm.is_active} onChange={e => setExerciseForm(prev => ({ ...prev, is_active: e.target.checked }))} /> <span style={{ color: C.ts, fontSize: 12 }}>{exerciseForm.is_active ? 'Visible' : 'Hidden'}</span></label></Field>
-                  <Field label="Explanation"><textarea value={exerciseForm.explanation} onChange={e => setExerciseForm(prev => ({ ...prev, explanation: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field>
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <ActionButton onClick={saveExercise} disabled={saving === 'exercise'}>{saving === 'exercise' ? 'Saving...' : exerciseEditId ? '💾 Update exercise' : '➕ Create exercise'}</ActionButton>
-                  <ActionButton tone="muted" onClick={() => { setExerciseEditId(null); setExerciseForm(prev => ({ ...EMPTY_EXERCISE, topic_id: prev.topic_id || topics[0]?.id || '', level: topicMap[prev.topic_id]?.level || 'A1' })) }}>Reset</ActionButton>
-                </div>
-              </div>
+        {contentTab === 'vocabulary' && <div style={{ display: 'grid', gap: 12 }}><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>{wordEditId ? '✏️ Edit Vocabulary' : '➕ Add Vocabulary'}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}><Field label="Word"><input value={wordForm.word} onChange={e => setWordForm(prev => ({ ...prev, word: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Translation"><input value={wordForm.translation} onChange={e => setWordForm(prev => ({ ...prev, translation: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Article"><input value={wordForm.article} onChange={e => setWordForm(prev => ({ ...prev, article: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Plural"><input value={wordForm.plural} onChange={e => setWordForm(prev => ({ ...prev, plural: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Phonetic"><input value={wordForm.phonetic} onChange={e => setWordForm(prev => ({ ...prev, phonetic: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Level"><select value={wordForm.level} onChange={e => setWordForm(prev => ({ ...prev, level: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{LEVELS.map(l => <option key={l}>{l}</option>)}</select></Field><Field label="Image URL"><input value={wordForm.image_url} onChange={e => setWordForm(prev => ({ ...prev, image_url: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Active"><label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={wordForm.is_active} onChange={e => setWordForm(prev => ({ ...prev, is_active: e.target.checked }))} /> <span style={{ color: C.ts, fontSize: 12 }}>{wordForm.is_active ? 'Visible' : 'Hidden'}</span></label></Field><Field label="Example"><textarea value={wordForm.example} onChange={e => setWordForm(prev => ({ ...prev, example: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field></div><div style={{ display: 'flex', gap: 8, marginTop: 10 }}><Btn onClick={saveWord} disabled={saving === 'word'}>{saving === 'word' ? 'Saving...' : wordEditId ? '💾 Update word' : '➕ Create word'}</Btn><Btn tone="muted" onClick={() => { setWordEditId(null); setWordForm(EMPTY_WORD) }}>Reset</Btn></div></div><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Vocabulary ({filteredWords.length})</div><div style={{ display: 'grid', gap: 8 }}>{filteredWords.map(row => <div key={row.id} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${row.is_active ? C.bdL : C.r}` }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><div style={{ minWidth: 0 }}><div style={{ color: C.t, fontWeight: 800 }}>{row.word} <span style={{ color: C.ts, fontWeight: 600 }}>{row.article ? `· ${row.article}` : ''}</span></div><div style={{ color: C.ts, fontSize: 12, marginTop: 3 }}>{row.level} · {row.translation}</div>{row.phonetic ? <div style={{ color: C.a, fontSize: 12, marginTop: 4 }}>{row.phonetic}</div> : null}{row.example ? <div style={{ color: C.ts, fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{row.example}</div> : null}</div><div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}><Badge tone={row.is_active ? 'green' : 'red'}>{row.is_active ? 'active' : 'hidden'}</Badge><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}><Btn tone="muted" onClick={() => editWord(row)}>Edit</Btn><Btn tone="muted" onClick={() => toggleWordActive(row)} disabled={saving === `word-active-${row.id}`}>{row.is_active ? 'Hide' : 'Show'}</Btn><Btn tone="danger" onClick={() => removeWord(row)} disabled={saving === `word-del-${row.id}`}>Delete</Btn></div></div></div></div>)}{filteredWords.length === 0 && <div style={{ color: C.ts, fontSize: 12 }}>No vocabulary items found.</div>}</div></div></div>}
 
-              <div style={{ ...gls({ padding: 14 }) }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Exercises ({filteredExercises.length})</div>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {filteredExercises.map(row => {
-                    const topic = topicMap[row.topic_id]
-                    return (
-                      <div key={row.id} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${row.is_active ? C.bdL : C.r}` }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ color: C.t, fontWeight: 800 }}>{row.level} · {row.exercise_type}</div>
-                            <div style={{ color: C.ts, fontSize: 12, marginTop: 4 }}>{topic ? `${topic.category || ''} · ${topic.title}` : row.topic_id}</div>
-                            <div style={{ color: C.t, fontSize: 12, marginTop: 8, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{row.question}</div>
-                            <div style={{ color: C.ts, fontSize: 11, marginTop: 6 }}>Answer: {row.correct_answer} · XP {row.xp_reward || 0}</div>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                            <Badge tone={row.is_active ? 'green' : 'red'}>{row.is_active ? 'active' : 'hidden'}</Badge>
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                              <ActionButton tone="muted" onClick={() => editExercise(row)}>Edit</ActionButton>
-                              <ActionButton tone="muted" onClick={() => toggleExerciseActive(row)} disabled={saving === `exercise-active-${row.id}`}>{row.is_active ? 'Hide' : 'Show'}</ActionButton>
-                              <ActionButton tone="danger" onClick={() => removeExercise(row)} disabled={saving === `exercise-del-${row.id}`}>Delete</ActionButton>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  {filteredExercises.length === 0 && <div style={{ color: C.ts, fontSize: 12 }}>No exercises found.</div>}
-                </div>
-              </div>
-            </div>
-          )}
+        {contentTab === 'lessons' && <div style={{ display: 'grid', gap: 12 }}><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>{lessonEditId ? '✏️ Edit Lesson' : '➕ Add Lesson'}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}><Field label="Title"><input value={lessonForm.title} onChange={e => setLessonForm(prev => ({ ...prev, title: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Level"><select value={lessonForm.level} onChange={e => setLessonForm(prev => ({ ...prev, level: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{LEVELS.map(l => <option key={l}>{l}</option>)}</select></Field><Field label="Order"><input type="number" value={lessonForm.order_index} onChange={e => setLessonForm(prev => ({ ...prev, order_index: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Locked"><label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={lessonForm.is_locked} onChange={e => setLessonForm(prev => ({ ...prev, is_locked: e.target.checked }))} /> <span style={{ color: C.ts, fontSize: 12 }}>{lessonForm.is_locked ? 'Locked' : 'Open'}</span></label></Field><Field label="Description"><textarea value={lessonForm.description} onChange={e => setLessonForm(prev => ({ ...prev, description: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field></div><div style={{ display: 'flex', gap: 8, marginTop: 10 }}><Btn onClick={saveLesson} disabled={saving === 'lesson'}>{saving === 'lesson' ? 'Saving...' : lessonEditId ? '💾 Update lesson' : '➕ Create lesson'}</Btn><Btn tone="muted" onClick={() => { setLessonEditId(null); setLessonForm(EMPTY_LESSON) }}>Reset</Btn></div></div><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Lessons ({filteredLessons.length})</div><div style={{ display: 'grid', gap: 8 }}>{filteredLessons.map(row => <div key={row.id} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${row.is_locked ? C.r : C.bdL}` }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><div style={{ minWidth: 0 }}><div style={{ color: C.t, fontWeight: 800 }}>{row.level} · {row.title}</div><div style={{ color: C.ts, fontSize: 12, marginTop: 3 }}>Order #{row.order_index ?? 0}</div>{row.description ? <div style={{ color: C.ts, fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{row.description}</div> : null}</div><div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}><Badge tone={row.is_locked ? 'red' : 'green'}>{row.is_locked ? 'locked' : 'open'}</Badge><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}><Btn tone="muted" onClick={() => editLesson(row)}>Edit</Btn><Btn tone="muted" onClick={() => toggleLessonLock(row)} disabled={saving === `lesson-lock-${row.id}`}>{row.is_locked ? 'Unlock' : 'Lock'}</Btn><Btn tone="danger" onClick={() => removeLesson(row)} disabled={saving === `lesson-del-${row.id}`}>Delete</Btn></div></div></div></div>)}{filteredLessons.length === 0 && <div style={{ color: C.ts, fontSize: 12 }}>No lessons found.</div>}</div></div></div>}
 
-          {contentTab === 'vocabulary' && (
-            <div style={{ display: 'grid', gap: 12 }}>
-              <div style={{ ...gls({ padding: 14 }) }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>{wordEditId ? '✏️ Edit Vocabulary' : '➕ Add Vocabulary'}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
-                  <Field label="Word"><input value={wordForm.word} onChange={e => setWordForm(prev => ({ ...prev, word: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Translation"><input value={wordForm.translation} onChange={e => setWordForm(prev => ({ ...prev, translation: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Article"><input value={wordForm.article} onChange={e => setWordForm(prev => ({ ...prev, article: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Plural"><input value={wordForm.plural} onChange={e => setWordForm(prev => ({ ...prev, plural: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Phonetic"><input value={wordForm.phonetic} onChange={e => setWordForm(prev => ({ ...prev, phonetic: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Level"><select value={wordForm.level} onChange={e => setWordForm(prev => ({ ...prev, level: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{LEVELS.map(l => <option key={l}>{l}</option>)}</select></Field>
-                  <Field label="Image URL"><input value={wordForm.image_url} onChange={e => setWordForm(prev => ({ ...prev, image_url: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Active"><label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={wordForm.is_active} onChange={e => setWordForm(prev => ({ ...prev, is_active: e.target.checked }))} /> <span style={{ color: C.ts, fontSize: 12 }}>{wordForm.is_active ? 'Visible' : 'Hidden'}</span></label></Field>
-                  <Field label="Example"><textarea value={wordForm.example} onChange={e => setWordForm(prev => ({ ...prev, example: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field>
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <ActionButton onClick={saveWord} disabled={saving === 'word'}>{saving === 'word' ? 'Saving...' : wordEditId ? '💾 Update word' : '➕ Create word'}</ActionButton>
-                  <ActionButton tone="muted" onClick={() => { setWordEditId(null); setWordForm(EMPTY_WORD) }}>Reset</ActionButton>
-                </div>
-              </div>
+        {contentTab === 'settings' && <div style={{ display: 'grid', gap: 12 }}><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Site settings</div><div style={{ display: 'grid', gap: 10 }}>{siteSettings.map(row => <div key={row.key} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${C.bdL}` }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline', marginBottom: 8 }}><strong style={{ color: C.t }}>{row.key}</strong><Btn onClick={() => saveSiteSetting(row.key, settingDrafts[row.key] ?? toJsonText(row.value))} disabled={saving === `setting-${row.key}`} style={{ padding: '7px 10px', fontSize: 11 }}>{saving === `setting-${row.key}` ? '...' : 'Save'}</Btn></div><textarea value={settingDrafts[row.key] ?? toJsonText(row.value)} onChange={e => setSettingDrafts(prev => ({ ...prev, [row.key]: e.target.value }))} rows={4} style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit', fontSize: 12 }} /><div style={{ color: C.ts, fontSize: 10, marginTop: 6 }}>Last updated: {row.updated_at ? new Date(row.updated_at).toLocaleString('ka-GE') : 'n/a'}</div></div>)}</div></div><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Add or override setting</div><div style={{ display: 'grid', gap: 8 }}><Field label="Key"><input value={newSettingKey} onChange={e => setNewSettingKey(e.target.value)} placeholder="maintenance_mode" style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Value (JSON or text)"><textarea value={newSettingValue} onChange={e => setNewSettingValue(e.target.value)} rows={5} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit', fontSize: 12 }} /></Field><Btn onClick={createNewSiteSetting} disabled={saving === 'setting-new'}>{saving === 'setting-new' ? '...' : 'Save new setting'}</Btn></div></div></div>}
 
-              <div style={{ ...gls({ padding: 14 }) }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Vocabulary ({filteredWords.length})</div>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {filteredWords.map(row => (
-                    <div key={row.id} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${row.is_active ? C.bdL : C.r}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ color: C.t, fontWeight: 800 }}>{row.word} <span style={{ color: C.ts, fontWeight: 600 }}>{row.article ? `· ${row.article}` : ''}</span></div>
-                          <div style={{ color: C.ts, fontSize: 12, marginTop: 3 }}>{row.level} · {row.translation}</div>
-                          {row.phonetic ? <div style={{ color: C.a, fontSize: 12, marginTop: 4 }}>{row.phonetic}</div> : null}
-                          {row.example ? <div style={{ color: C.ts, fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{row.example}</div> : null}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                          <Badge tone={row.is_active ? 'green' : 'red'}>{row.is_active ? 'active' : 'hidden'}</Badge>
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            <ActionButton tone="muted" onClick={() => editWord(row)}>Edit</ActionButton>
-                            <ActionButton tone="muted" onClick={() => toggleWordActive(row)} disabled={saving === `word-active-${row.id}`}>{row.is_active ? 'Hide' : 'Show'}</ActionButton>
-                            <ActionButton tone="danger" onClick={() => removeWord(row)} disabled={saving === `word-del-${row.id}`}>Delete</ActionButton>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {filteredWords.length === 0 && <div style={{ color: C.ts, fontSize: 12 }}>No vocabulary items found.</div>}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {contentTab === 'lessons' && (
-            <div style={{ display: 'grid', gap: 12 }}>
-              <div style={{ ...gls({ padding: 14 }) }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>{lessonEditId ? '✏️ Edit Lesson' : '➕ Add Lesson'}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
-                  <Field label="Title"><input value={lessonForm.title} onChange={e => setLessonForm(prev => ({ ...prev, title: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Level"><select value={lessonForm.level} onChange={e => setLessonForm(prev => ({ ...prev, level: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }}>{LEVELS.map(l => <option key={l}>{l}</option>)}</select></Field>
-                  <Field label="Order"><input type="number" value={lessonForm.order_index} onChange={e => setLessonForm(prev => ({ ...prev, order_index: e.target.value }))} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Locked"><label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={lessonForm.is_locked} onChange={e => setLessonForm(prev => ({ ...prev, is_locked: e.target.checked }))} /> <span style={{ color: C.ts, fontSize: 12 }}>{lessonForm.is_locked ? 'Locked' : 'Open'}</span></label></Field>
-                  <Field label="Description"><textarea value={lessonForm.description} onChange={e => setLessonForm(prev => ({ ...prev, description: e.target.value }))} rows={4} style={{ width: '100%', gridColumn: '1 / -1', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit' }} /></Field>
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <ActionButton onClick={saveLesson} disabled={saving === 'lesson'}>{saving === 'lesson' ? 'Saving...' : lessonEditId ? '💾 Update lesson' : '➕ Create lesson'}</ActionButton>
-                  <ActionButton tone="muted" onClick={() => { setLessonEditId(null); setLessonForm(EMPTY_LESSON) }}>Reset</ActionButton>
-                </div>
-              </div>
-
-              <div style={{ ...gls({ padding: 14 }) }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Lessons ({filteredLessons.length})</div>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {filteredLessons.map(row => (
-                    <div key={row.id} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${row.is_locked ? C.r : C.bdL}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ color: C.t, fontWeight: 800 }}>{row.level} · {row.title}</div>
-                          <div style={{ color: C.ts, fontSize: 12, marginTop: 3 }}>Order #{row.order_index ?? 0}</div>
-                          {row.description ? <div style={{ color: C.ts, fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{row.description}</div> : null}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                          <Badge tone={row.is_locked ? 'red' : 'green'}>{row.is_locked ? 'locked' : 'open'}</Badge>
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            <ActionButton tone="muted" onClick={() => editLesson(row)}>Edit</ActionButton>
-                            <ActionButton tone="muted" onClick={() => toggleLessonLock(row)} disabled={saving === `lesson-lock-${row.id}`}>{row.is_locked ? 'Unlock' : 'Lock'}</ActionButton>
-                            <ActionButton tone="danger" onClick={() => removeLesson(row)} disabled={saving === `lesson-del-${row.id}`}>Delete</ActionButton>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {filteredLessons.length === 0 && <div style={{ color: C.ts, fontSize: 12 }}>No lessons found.</div>}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {contentTab === 'settings' && (
-            <div style={{ display: 'grid', gap: 12 }}>
-              <div style={{ ...gls({ padding: 14 }) }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Site settings</div>
-                <div style={{ display: 'grid', gap: 10 }}>
-                  {siteSettings.map(row => (
-                    <div key={row.key} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${C.bdL}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline', marginBottom: 8 }}>
-                        <strong style={{ color: C.t }}>{row.key}</strong>
-                        <button onClick={() => saveSiteSetting(row.key, settingDrafts[row.key] ?? toJsonText(row.value))} disabled={saving === `setting-${row.key}`} style={{ border: 'none', borderRadius: 8, padding: '7px 10px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: 11, background: `${C.a}22`, color: C.a, border: `1px solid ${C.a}44` }}>{saving === `setting-${row.key}` ? '...' : 'Save'}</button>
-                      </div>
-                      <textarea value={settingDrafts[row.key] ?? toJsonText(row.value)} onChange={e => setSettingDrafts(prev => ({ ...prev, [row.key]: e.target.value }))} rows={4} style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit', fontSize: 12 }} />
-                      <div style={{ color: C.ts, fontSize: 10, marginTop: 6 }}>Last updated: {row.updated_at ? new Date(row.updated_at).toLocaleString('ka-GE') : 'n/a'}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ ...gls({ padding: 14 }) }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Add or override setting</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-                  <Field label="Key"><input value={newSettingKey} onChange={e => setNewSettingKey(e.target.value)} placeholder="maintenance_mode" style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field>
-                  <Field label="Value (JSON or text)"><textarea value={newSettingValue} onChange={e => setNewSettingValue(e.target.value)} rows={5} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit', fontSize: 12 }} /></Field>
-                  <ActionButton onClick={createNewSiteSetting} disabled={saving === 'setting-new'}>{saving === 'setting-new' ? '...' : 'Save new setting'}</ActionButton>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {contentTab === 'logs' && (
-            <div style={{ display: 'grid', gap: 12 }}>
-              <input value={logSearch} onChange={e => setLogSearch(e.target.value)} placeholder="🔍 audit log search..." style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 14px', color: C.t, fontSize: 13, marginBottom: 0, outline: 'none', fontFamily: 'inherit' }} />
-              <div style={{ ...gls({ padding: 14 }) }}>
-                <div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Audit logs ({filteredLogs.length})</div>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {filteredLogs.map(row => (
-                    <div key={row.id} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${C.bdL}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
-                        <div>
-                          <div style={{ color: C.t, fontWeight: 800 }}>{row.action}</div>
-                          <div style={{ color: C.ts, fontSize: 11, marginTop: 4 }}>{row.entity_type || 'system'} · {row.entity_id || 'n/a'}</div>
-                        </div>
-                        <div style={{ color: C.ts, fontSize: 10 }}>{new Date(row.created_at).toLocaleString('ka-GE')}</div>
-                      </div>
-                      {row.details ? <pre style={{ marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: C.card3, borderRadius: 10, padding: 10, fontSize: 11, color: C.ts, overflowX: 'auto' }}>{JSON.stringify(row.details, null, 2)}</pre> : null}
-                    </div>
-                  ))}
-                  {filteredLogs.length === 0 && <div style={{ color: C.ts, fontSize: 12 }}>No audit logs found.</div>}
-                </div>
-              </div>
-            </div>
-          )}
+        {contentTab === 'logs' && <div style={{ display: 'grid', gap: 12 }}><input value={logSearch} onChange={e => setLogSearch(e.target.value)} placeholder="🔍 audit log search..." style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 14px', color: C.t, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} /><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Audit logs ({filteredLogs.length})</div><div style={{ display: 'grid', gap: 8 }}>{filteredLogs.map(row => <div key={row.id} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${C.bdL}` }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}><div><div style={{ color: C.t, fontWeight: 800 }}>{row.action}</div><div style={{ color: C.ts, fontSize: 11, marginTop: 4 }}>{row.entity_type || 'system'} · {row.entity_id || 'n/a'}</div></div><div style={{ color: C.ts, fontSize: 10 }}>{new Date(row.created_at).toLocaleString('ka-GE')}</div></div>{row.details ? <pre style={{ marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: C.card3, borderRadius: 10, padding: 10, fontSize: 11, color: C.ts, overflowX: 'auto' }}>{JSON.stringify(row.details, null, 2)}</pre> : null}</div>)}{filteredLogs.length === 0 && <div style={{ color: C.ts, fontSize: 12 }}>No audit logs found.</div>}</div></div></div>}
         </div>
       )}
     </div>
