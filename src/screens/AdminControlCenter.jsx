@@ -210,9 +210,120 @@ export default function AdminControlCenter({ lang, user }) {
 
         {contentTab === 'settings' && <div style={{ display: 'grid', gap: 12 }}><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Site settings</div><div style={{ display: 'grid', gap: 10 }}>{siteSettings.map(row => <div key={row.key} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${C.bdL}` }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline', marginBottom: 8 }}><strong style={{ color: C.t }}>{row.key}</strong><Btn onClick={() => saveSiteSetting(row.key, settingDrafts[row.key] ?? toJsonText(row.value))} disabled={saving === `setting-${row.key}`} style={{ padding: '7px 10px', fontSize: 11 }}>{saving === `setting-${row.key}` ? '...' : 'Save'}</Btn></div><textarea value={settingDrafts[row.key] ?? toJsonText(row.value)} onChange={e => setSettingDrafts(prev => ({ ...prev, [row.key]: e.target.value }))} rows={4} style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit', fontSize: 12 }} /><div style={{ color: C.ts, fontSize: 10, marginTop: 6 }}>Last updated: {row.updated_at ? new Date(row.updated_at).toLocaleString('ka-GE') : 'n/a'}</div></div>)}</div></div><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Add or override setting</div><div style={{ display: 'grid', gap: 8 }}><Field label="Key"><input value={newSettingKey} onChange={e => setNewSettingKey(e.target.value)} placeholder="maintenance_mode" style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, fontFamily: 'inherit' }} /></Field><Field label="Value (JSON or text)"><textarea value={newSettingValue} onChange={e => setNewSettingValue(e.target.value)} rows={5} style={{ width: '100%', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 12px', color: C.t, resize: 'vertical', fontFamily: 'inherit', fontSize: 12 }} /></Field><Btn onClick={createNewSiteSetting} disabled={saving === 'setting-new'}>{saving === 'setting-new' ? '...' : 'Save new setting'}</Btn></div></div></div>}
 
-        {contentTab === 'logs' && <div style={{ display: 'grid', gap: 12 }}><input value={logSearch} onChange={e => setLogSearch(e.target.value)} placeholder="🔍 audit log search..." style={{ width: '100%', boxSizing: 'border-box', background: C.card3, border: `1px solid ${C.bdL}`, borderRadius: 10, padding: '10px 14px', color: C.t, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} /><div style={{ ...gls({ padding: 14 }) }}><div style={{ color: C.t, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Audit logs ({filteredLogs.length})</div><div style={{ display: 'grid', gap: 8 }}>{filteredLogs.map(row => <div key={row.id} style={{ background: C.card2, borderRadius: 12, padding: 12, border: `1px solid ${C.bdL}` }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}><div><div style={{ color: C.t, fontWeight: 800 }}>{row.action}</div><div style={{ color: C.ts, fontSize: 11, marginTop: 4 }}>{row.entity_type || 'system'} · {row.entity_id || 'n/a'}</div></div><div style={{ color: C.ts, fontSize: 10 }}>{new Date(row.created_at).toLocaleString('ka-GE')}</div></div>{row.details ? <pre style={{ marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: C.card3, borderRadius: 10, padding: 10, fontSize: 11, color: C.ts, overflowX: 'auto' }}>{JSON.stringify(row.details, null, 2)}</pre> : null}</div>)}{filteredLogs.length === 0 && <div style={{ color: C.ts, fontSize: 12 }}>No audit logs found.</div>}</div></div></div>}
-        </div>
-      
-    </div> 
+        {contentTab === 'logs' && (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <input
+              value={logSearch}
+              onChange={e => setLogSearch(e.target.value)}
+              placeholder="🔍 audit log search..."
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                background: C.card3,
+                border: `1px solid ${C.bdL}`,
+                borderRadius: 10,
+                padding: '10px 14px',
+                color: C.t,
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit'
+              }}
+            />
+
+            <div style={{ ...gls({ padding: 14 }) }}>
+              <div
+                style={{
+                  color: C.t,
+                  fontWeight: 800,
+                  fontSize: 14,
+                  marginBottom: 10
+                }}
+              >
+                Audit logs ({filteredLogs.length})
+              </div>
+
+              <div style={{ display: 'grid', gap: 8 }}>
+                {filteredLogs.map(row => (
+                  <div
+                    key={row.id}
+                    style={{
+                      background: C.card2,
+                      borderRadius: 12,
+                      padding: 12,
+                      border: `1px solid ${C.bdL}`
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        alignItems: 'baseline'
+                      }}
+                    >
+                      <div>
+                        <div style={{ color: C.t, fontWeight: 800 }}>
+                          {row.action}
+                        </div>
+
+                        <div
+                          style={{
+                            color: C.ts,
+                            fontSize: 11,
+                            marginTop: 4
+                          }}
+                        >
+                          {row.entity_type || 'system'} ·{' '}
+                          {row.entity_id || 'n/a'}
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          color: C.ts,
+                          fontSize: 10
+                        }}
+                      >
+                        {new Date(row.created_at).toLocaleString('ka-GE')}
+                      </div>
+                    </div>
+
+                    {row.details ? (
+                      <pre
+                        style={{
+                          marginTop: 8,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          background: C.card3,
+                          borderRadius: 10,
+                          padding: 10,
+                          fontSize: 11,
+                          color: C.ts,
+                          overflowX: 'auto'
+                        }}
+                      >
+                        {JSON.stringify(row.details, null, 2)}
+                      </pre>
+                    ) : null}
+                  </div>
+                ))}
+
+                {filteredLogs.length === 0 && (
+                  <div
+                    style={{
+                      color: C.ts,
+                      fontSize: 12
+                    }}
+                  >
+                    No audit logs found.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
   )
-}
+      }
