@@ -235,6 +235,123 @@ export const getAllProfiles = async () => {
   return data || []
 }
 
+export const getSiteStats = async () => {
+  const [profilesRes, messagesRes, sessionsRes] = await Promise.all([
+    supabase.from('profiles').select('id, xp, current_lang, chat_blocked, last_active, is_admin'),
+    supabase.from('chat_messages').select('id, created_at'),
+    supabase.from('grammar_sessions').select('id, completed_at'),
+  ])
+
+  const profiles = profilesRes.data || []
+  const messages = messagesRes.data || []
+  const sessions = sessionsRes.data || []
+  const todayDate = today()
+
+  const byLang = profiles.reduce((acc, p) => {
+    const key = p.current_lang || 'unknown'
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
+
+  return {
+    totalUsers: profiles.length,
+    totalXP: profiles.reduce((sum, p) => sum + (p.xp || 0), 0),
+    totalSessions: sessions.length,
+    activeToday: profiles.filter(p => (p.last_active || '').slice(0, 10) === todayDate).length,
+    totalMsgs: messages.length,
+    blockedCount: profiles.filter(p => p.chat_blocked).length,
+    admins: profiles.filter(p => p.is_admin).length,
+    byLang,
+  }
+}
+
+async function adminAudit(adminId, action, entityType = null, entityId = null, details = {}) {
+  try {
+    await supabase.from('admin_audit_log').insert({
+      admin_id: adminId,
+      action,
+      entity_type: entityType,
+      entity_id: entityId,
+      details,
+    })
+  } catch (error) {
+    console.error('adminAudit', error)
+  }
+}
+
+export const adminSetXP = async (userId, xp, adminId = null) => {
+  const value = Number(xp)
+  const { error } = await supabase.from('profiles').update({ xp: Number.isFinite(value) ? value : 0 }).eq('id', userId)
+  if (!error) await adminAudit(adminId, 'set_xp', 'profile', userId, { xp: Number.isFinite(value) ? value : 0 })
+  if (error) console.error(error)
+}
+
+export const adminSetStreak = async (userId, streak, adminId = null) => {
+  const value = Number(streak)
+  const { error } = await supabase.from('profiles').update({ streak: Number.isFinite(value) ? value : 0 }).eq('id', userId)
+  if (!error) await adminAudit(adminId, 'set_streak', 'profile', userId, { streak: Number.isFinite(value) ? value : 0 })
+  if (error) console.error(error)
+}
+
+export const adminToggleAdmin = async (userId, makeAdmin, adminId = null) => {
+  const { error } = await supabase.from('profiles').update({ is_admin: Boolean(makeAdmin) }).eq('id', userId)
+  if (!error) await adminAudit(adminId, makeAdmin ? 'grant_admin' : 'revoke_admin', 'profile', userId)
+  if (error) console.error(error)
+}
+
+export const adminToggleBlock = async (userId, blocked, adminId = null) => {
+  const { error } = await supabase.from('profiles').update({ chat_blocked: Boolean(blocked) }).eq('id', userId)
+  if (!error) await adminAudit(adminId, blocked ? 'block_user' : 'unblock_user', 'profile', userId)
+  if (error) console.error(error)
+}
+
+export const adminDeleteMessage = async (messageId, adminId = null) => {
+  const { error } = await supabase.from('chat_messages').delete().eq('id', messageId)
+  if (!error) await adminAudit(adminId, 'delete_message', 'chat_message', messageId)
+  if (error) console.error(error)
+}
+
+export const adminDeleteUserMessages = async (userId, adminId = null) => {
+  const { error } = await supabase.from('chat_messages').delete().eq('user_id', userId)
+  if (!error) await adminAudit(adminId, 'delete_user_messages', 'profile', userId)
+  if (error) console.error(error)
+}
+
+export const adminBroadcast = async (text, username = 'Admin', adminId = null) => {
+  const { error } = await supabase.from('chat_messages').insert({
+    user_id: null,
+    username,
+    text,
+    is_bot: true,
+  })
+  if (!error) await adminAudit(adminId, 'broadcast', 'system', 'chat_messages', { text })
+  if (error) console.error(error)
+}
+
+export const adminSetSiteSetting = async (key, value, adminId = null) => {
+  const { error } = await supabase.from('site_settings').upsert({
+    key,
+    value,
+    updated_by: adminId,
+    updated_at: new Date().toISOString(),
+  })
+  if (!error) await adminAudit(adminId, 'set_site_setting', 'site_setting', key, { value })
+  if (error) console.error(error)
+}
+
+export const adminSetContentOverride = async ({ entityType, entityId, action, payload = {}, reason = '', adminId = null }) => {
+  const { error } = await supabase.from('content_overrides').insert({
+    entity_type: entityType,
+    entity_id: entityId,
+    action,
+    payload,
+    reason,
+    created_by: adminId,
+  })
+  if (!error) await adminAudit(adminId, action, entityType, entityId, { reason, payload })
+  if (error) console.error(error)
+}
+
 // ── Direct Messages ──────────────────────────────────────────
 export const getDmUsers = async (myId) => {
   const { data: profiles } = await supabase
