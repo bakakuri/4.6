@@ -46,7 +46,7 @@ export const getStats = async (userId, lang) => {
   const ws = allWords(lang)
   const [{ data: prog }, { data: prof }, { data: acts }] = await Promise.all([
     supabase.from('word_progress').select('mastery').eq('user_id', userId).eq('lang', lang),
-    supabase.from('profiles').select('sessions,streak,chat_correct,chat_total,xp,daily_goal,achievements').eq('id', userId).single(),
+    supabase.from('profiles').select('sessions,streak,chat_correct,chat_total,xp,daily_grammar_target,achievements').eq('id', userId).single(),
     supabase.from('activity').select('day_of_week,value').eq('user_id', userId).eq('week_start', weekStart()),
   ])
   const p = prof || {}
@@ -64,7 +64,7 @@ export const getStats = async (userId, lang) => {
     accuracy: chatTot ? Math.round((chatOk / chatTot) * 100) : null,
     activity,
     xp: p.xp || 0,
-    daily_goal: p.daily_goal || 10,
+    daily_goal: p.daily_grammar_target || 10,
     achievements: p.achievements || [],
   }
 }
