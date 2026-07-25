@@ -16,7 +16,7 @@ import ExercisesScreen   from './screens/ExercisesScreen.jsx'
 import ProfileScreen     from './screens/ProfileScreen.jsx'
 import SettingsScreen    from './screens/SettingsScreen.jsx'
 import ChatScreen        from './screens/ChatScreen.jsx'
-import AdminScreen       from './screens/AdminScreen.jsx'
+import AdminControlCenterStable from './screens/AdminControlCenterStable.jsx'
 import LearnedWordsScreen from './screens/LearnedWordsScreen.jsx'
 import DuelScreen        from './screens/DuelScreen.jsx'
 import FriendsScreen     from './screens/FriendsScreen.jsx'
@@ -159,7 +159,7 @@ function Inner() {
         {page==='profile'    && <ProfileScreen    user={user} lang={lang} onNav={navigate} />}
         {page==='settings'   && <SettingsScreen   user={user} lang={lang} onLangChange={() => setShowLangSel(true)} onLogout={handleLogout} onNav={navigate} onProfileChange={(patch) => setProfile(p => ({ ...p, ...patch }))} />}
         {page==='chat'       && <ChatScreen       user={user} lang={lang} />}
-        {page==='admin' && user.isAdmin && <AdminScreen lang={lang} user={user} />}
+        {page==='admin' && user.isAdmin && <AdminControlCenterStable user={user} lang={lang} />}
         {page==='duel'       && <DuelScreen        user={user} lang={lang} onBack={() => navigate('home')} />}
         {page==='friends'    && <FriendsScreen     user={user} onNav={navigate} onChallenge={() => navigate('duel')} />}
         {page==='customWords'   && <CustomWordsScreen    user={user} lang={lang} onBack={() => navigate('settings')} />}
