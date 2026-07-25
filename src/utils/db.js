@@ -125,6 +125,42 @@ export const removeFromPracticeQueue = async (userId, lang, wordId) => {
   if (error) console.error('removeFromPracticeQueue', error)
 }
 
+export const getHeatmap = async (userId, lang) => {
+  const from = new Date()
+  from.setDate(from.getDate() - 363)
+  const { data, error } = await supabase.from('word_progress').select('updated_at').eq('user_id', userId).eq('lang', lang).gte('updated_at', from.toISOString())
+  if (error) { console.error('getHeatmap', error); return {} }
+  return (data || []).reduce((acc, row) => {
+    const key = new Date(row.updated_at).toISOString().slice(0, 10)
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
+}
+
+export const getDailyActivity = async (userId, days = 14) => {
+  const from = new Date()
+  from.setDate(from.getDate() - (days - 1))
+  const { data, error } = await supabase.from('word_progress').select('updated_at').eq('user_id', userId).gte('updated_at', from.toISOString())
+  if (error) { console.error('getDailyActivity', error); return [] }
+  const counts = (data || []).reduce((acc, row) => {
+    const key = new Date(row.updated_at).toISOString().slice(0, 10)
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
+  return Array.from({ length: days }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (days - 1 - i))
+    const key = d.toISOString().slice(0, 10)
+    return { date: key, label: key.slice(5), count: counts[key] || 0 }
+  })
+}
+
+export const getPracticeQueueCount = async (userId, lang) => {
+  const { count, error } = await supabase.from('practice_queue').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('lang', lang).eq('status', 'active')
+  if (error) { console.error('getPracticeQueueCount', error); return 0 }
+  return count || 0
+}
+
 export const updateAchievements = async (userId, stats) => {
   try {
     const { data } = await supabase.from('profiles').select('achievements,xp,streak').eq('id', userId).single()
