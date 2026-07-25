@@ -20,8 +20,8 @@ export const saveProgress = async (userId, lang, wordId, mastery) => {
   if (error) console.error(error)
 }
 
-export const nextCardFromProgress = (progMap, lang) => {
-  const ws = allWords(lang)
+export const nextCardFromProgress = (progMap, lang, allowedIds = null) => {
+  const ws = allWords(lang).filter(w => !allowedIds || allowedIds.includes(w.id))
   const unseen = ws.filter(w => !progMap[w.id])
   if (unseen.length) return unseen[0]
   return ws.filter(w => (progMap[w.id]?.mastery || 0) < 100).sort((a, b) => {
@@ -30,6 +30,12 @@ export const nextCardFromProgress = (progMap, lang) => {
     if (pa.mastery !== pb.mastery) return pa.mastery - pb.mastery
     return (pa.ts || 0) - (pb.ts || 0)
   })[0] || null
+}
+
+export const getWeakWordIds = async (userId, lang) => {
+  const { data, error } = await supabase.from('word_progress').select('word_id,mastery').eq('user_id', userId).eq('lang', lang).lt('mastery', 50).order('mastery', { ascending: true })
+  if (error) { console.error('getWeakWordIds', error); return [] }
+  return (data || []).map(row => row.word_id).filter(Boolean)
 }
 
 export const getStats = async (userId, lang) => {
@@ -86,17 +92,15 @@ export const bumpActivity = async (userId) => {
   try {
     const dow = new Date().getDay(), week = weekStart(), td = today(), yd = yesterday()
     const { data: act } = await supabase.from('activity').select('value').eq('user_id', userId).eq('day_of_week', dow).eq('week_start', week).maybeSingle()
-    if (act) {
-      await supabase.from('activity').update({ value: Math.min(100, (act.value || 0) + 10) }).eq('user_id', userId).eq('day_of_week', dow).eq('week_start', week)
-    } else {
-      await supabase.from('activity').insert({ user_id: userId, day_of_week: dow, week_start: week, value: 10 })
-    }
+    if (act) await supabase.from('activity').update({ value: Math.min(100, (act.value || 0) + 10) }).eq('user_id', userId).eq('day_of_week', dow).eq('week_start', week)
+    else await supabase.from('activity').insert({ user_id: userId, day_of_week: dow, week_start: week, value: 10 })
     const { data: prof } = await supabase.from('profiles').select('streak,last_active').eq('id', userId).single()
     const last = prof?.last_active
     let streak = prof?.streak || 0
     if (last === td) return
-    if (last === yd) { streak++; await supabase.from('profiles').update({ streak, last_active: td }).eq('id', userId) }
-    else { streak = 1; await supabase.from('profiles').update({ streak, last_active: td }).eq('id', userId) }
+    if (last === yd) streak++
+    else streak = 1
+    await supabase.from('profiles').update({ streak, last_active: td }).eq('id', userId)
   } catch (e) { console.error('bumpActivity', e) }
 }
 
@@ -109,15 +113,25 @@ export const awardXP = async (userId, amount) => {
   } catch (e) { console.error('awardXP', e); return 0 }
 }
 
+export const addXP = awardXP
+
+export const addToPracticeQueue = async (userId, lang, wordId) => {
+  const { error } = await supabase.from('practice_queue').upsert({ user_id: userId, lang, word_id: wordId, status: 'active' }, { onConflict: 'user_id,lang,word_id' })
+  if (error) console.error('addToPracticeQueue', error)
+}
+
+export const removeFromPracticeQueue = async (userId, lang, wordId) => {
+  const { error } = await supabase.from('practice_queue').delete().eq('user_id', userId).eq('lang', lang).eq('word_id', wordId)
+  if (error) console.error('removeFromPracticeQueue', error)
+}
+
 export const updateAchievements = async (userId, stats) => {
   try {
     const { data } = await supabase.from('profiles').select('achievements,xp,streak').eq('id', userId).single()
     const earned = data?.achievements || []
     const fullStats = { ...stats, xp: data?.xp || 0, streak: data?.streak || 0 }
     const newOnes = checkNewAchievements(fullStats, earned)
-    if (newOnes.length) {
-      await supabase.from('profiles').update({ achievements: [...earned, ...newOnes.map(a => a.id)] }).eq('id', userId)
-    }
+    if (newOnes.length) await supabase.from('profiles').update({ achievements: [...earned, ...newOnes.map(a => a.id)] }).eq('id', userId)
     return newOnes
   } catch (e) { console.error('updateAchievements', e); return [] }
 }
@@ -185,71 +199,21 @@ export const getSiteStats = async () => {
   const sessions = sessionsRes.data || []
   const todayDate = today()
   const byLang = profiles.reduce((acc, p) => { const key = p.current_lang || 'unknown'; acc[key] = (acc[key] || 0) + 1; return acc }, {})
-  return {
-    totalUsers: profiles.length,
-    totalXP: profiles.reduce((sum, p) => sum + (p.xp || 0), 0),
-    totalSessions: sessions.length,
-    activeToday: profiles.filter(p => (p.last_active || '').slice(0, 10) === todayDate).length,
-    totalMsgs: messages.length,
-    blockedCount: profiles.filter(p => p.chat_blocked).length,
-    admins: profiles.filter(p => p.is_admin).length,
-    byLang,
-  }
+  return { totalUsers: profiles.length, totalXP: profiles.reduce((sum, p) => sum + (p.xp || 0), 0), totalSessions: sessions.length, activeToday: profiles.filter(p => (p.last_active || '').slice(0, 10) === todayDate).length, totalMsgs: messages.length, blockedCount: profiles.filter(p => p.chat_blocked).length, admins: profiles.filter(p => p.is_admin).length, byLang }
 }
 
 async function adminAudit(adminId, action, entityType = null, entityId = null, details = {}) {
-  try {
-    await supabase.from('admin_audit_log').insert({ admin_id: adminId, action, entity_type: entityType, entity_id: entityId, details })
-  } catch (error) { console.error('adminAudit', error) }
+  try { await supabase.from('admin_audit_log').insert({ admin_id: adminId, action, entity_type: entityType, entity_id: entityId, details }) } catch (error) { console.error('adminAudit', error) }
 }
-
-export const adminSetXP = async (userId, xp, adminId = null) => {
-  const value = Number(xp)
-  const { error } = await supabase.from('profiles').update({ xp: Number.isFinite(value) ? value : 0 }).eq('id', userId)
-  if (!error) await adminAudit(adminId, 'set_xp', 'profile', userId, { xp: Number.isFinite(value) ? value : 0 })
-  if (error) console.error(error)
-}
-export const adminSetStreak = async (userId, streak, adminId = null) => {
-  const value = Number(streak)
-  const { error } = await supabase.from('profiles').update({ streak: Number.isFinite(value) ? value : 0 }).eq('id', userId)
-  if (!error) await adminAudit(adminId, 'set_streak', 'profile', userId, { streak: Number.isFinite(value) ? value : 0 })
-  if (error) console.error(error)
-}
-export const adminToggleAdmin = async (userId, makeAdmin, adminId = null) => {
-  const { error } = await supabase.from('profiles').update({ is_admin: Boolean(makeAdmin) }).eq('id', userId)
-  if (!error) await adminAudit(adminId, makeAdmin ? 'grant_admin' : 'revoke_admin', 'profile', userId)
-  if (error) console.error(error)
-}
-export const adminToggleBlock = async (userId, blocked, adminId = null) => {
-  const { error } = await supabase.from('profiles').update({ chat_blocked: Boolean(blocked) }).eq('id', userId)
-  if (!error) await adminAudit(adminId, blocked ? 'block_user' : 'unblock_user', 'profile', userId)
-  if (error) console.error(error)
-}
-export const adminDeleteMessage = async (messageId, adminId = null) => {
-  const { error } = await supabase.from('chat_messages').delete().eq('id', messageId)
-  if (!error) await adminAudit(adminId, 'delete_message', 'chat_message', messageId)
-  if (error) console.error(error)
-}
-export const adminDeleteUserMessages = async (userId, adminId = null) => {
-  const { error } = await supabase.from('chat_messages').delete().eq('user_id', userId)
-  if (!error) await adminAudit(adminId, 'delete_user_messages', 'profile', userId)
-  if (error) console.error(error)
-}
-export const adminBroadcast = async (text, username = 'Admin', adminId = null) => {
-  const { error } = await supabase.from('chat_messages').insert({ user_id: null, username, text, is_bot: true })
-  if (!error) await adminAudit(adminId, 'broadcast', 'system', 'chat_messages', { text })
-  if (error) console.error(error)
-}
-export const adminSetSiteSetting = async (key, value, adminId = null) => {
-  const { error } = await supabase.from('site_settings').upsert({ key, value, updated_by: adminId, updated_at: new Date().toISOString() })
-  if (!error) await adminAudit(adminId, 'set_site_setting', 'site_setting', key, { value })
-  if (error) console.error(error)
-}
-export const adminSetContentOverride = async ({ entityType, entityId, action, payload = {}, reason = '', adminId = null }) => {
-  const { error } = await supabase.from('content_overrides').insert({ entity_type: entityType, entity_id: entityId, action, payload, reason, created_by: adminId })
-  if (!error) await adminAudit(adminId, action, entityType, entityId, { reason, payload })
-  if (error) console.error(error)
-}
+export const adminSetXP = async (userId, xp, adminId = null) => { const value = Number(xp); const { error } = await supabase.from('profiles').update({ xp: Number.isFinite(value) ? value : 0 }).eq('id', userId); if (!error) await adminAudit(adminId, 'set_xp', 'profile', userId, { xp: value }); if (error) console.error(error) }
+export const adminSetStreak = async (userId, streak, adminId = null) => { const value = Number(streak); const { error } = await supabase.from('profiles').update({ streak: Number.isFinite(value) ? value : 0 }).eq('id', userId); if (!error) await adminAudit(adminId, 'set_streak', 'profile', userId, { streak: value }); if (error) console.error(error) }
+export const adminToggleAdmin = async (userId, makeAdmin, adminId = null) => { const { error } = await supabase.from('profiles').update({ is_admin: Boolean(makeAdmin) }).eq('id', userId); if (!error) await adminAudit(adminId, makeAdmin ? 'grant_admin' : 'revoke_admin', 'profile', userId); if (error) console.error(error) }
+export const adminToggleBlock = async (userId, blocked, adminId = null) => { const { error } = await supabase.from('profiles').update({ chat_blocked: Boolean(blocked) }).eq('id', userId); if (!error) await adminAudit(adminId, blocked ? 'block_user' : 'unblock_user', 'profile', userId); if (error) console.error(error) }
+export const adminDeleteMessage = async (messageId, adminId = null) => { const { error } = await supabase.from('chat_messages').delete().eq('id', messageId); if (!error) await adminAudit(adminId, 'delete_message', 'chat_message', messageId); if (error) console.error(error) }
+export const adminDeleteUserMessages = async (userId, adminId = null) => { const { error } = await supabase.from('chat_messages').delete().eq('user_id', userId); if (!error) await adminAudit(adminId, 'delete_user_messages', 'profile', userId); if (error) console.error(error) }
+export const adminBroadcast = async (text, username = 'Admin', adminId = null) => { const { error } = await supabase.from('chat_messages').insert({ user_id: null, username, text, is_bot: true }); if (!error) await adminAudit(adminId, 'broadcast', 'system', 'chat_messages', { text }); if (error) console.error(error) }
+export const adminSetSiteSetting = async (key, value, adminId = null) => { const { error } = await supabase.from('site_settings').upsert({ key, value, updated_by: adminId, updated_at: new Date().toISOString() }); if (!error) await adminAudit(adminId, 'set_site_setting', 'site_setting', key, { value }); if (error) console.error(error) }
+export const adminSetContentOverride = async ({ entityType, entityId, action, payload = {}, reason = '', adminId = null }) => { const { error } = await supabase.from('content_overrides').insert({ entity_type: entityType, entity_id: entityId, action, payload, reason, created_by: adminId }); if (!error) await adminAudit(adminId, action, entityType, entityId, { reason, payload }); if (error) console.error(error) }
 
 export const getDmUsers = async (myId) => {
   const { data: profiles } = await supabase.from('profiles').select('id,username,photo_url').neq('id', myId)
@@ -260,13 +224,7 @@ export const getDmUsers = async (myId) => {
     const unread = (msgs || []).filter(m => m.receiver_id === myId && !m.read).length
     return { ...p, lastMsg: last?.text || null, lastTime: last?.created_at || null, unread }
   }))
-  return results.sort((a, b) => {
-    if (a.unread !== b.unread) return b.unread - a.unread
-    if (a.lastTime && b.lastTime) return new Date(b.lastTime) - new Date(a.lastTime)
-    if (a.lastTime) return -1
-    if (b.lastTime) return 1
-    return a.username.localeCompare(b.username)
-  })
+  return results.sort((a, b) => { if (a.unread !== b.unread) return b.unread - a.unread; if (a.lastTime && b.lastTime) return new Date(b.lastTime) - new Date(a.lastTime); if (a.lastTime) return -1; if (b.lastTime) return 1; return a.username.localeCompare(b.username) })
 }
 
 export const getDmThread = async (myId, otherId) => {
