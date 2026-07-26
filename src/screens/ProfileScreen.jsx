@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTheme } from '../lib/ThemeContext.jsx'
 import { LANG, LEVELS, LEVEL_COLORS } from '../theme.js'
 import WDB from '../data/words.js'
-import { getProgress, getStats, updateProfile, getHeatmap, getDailyActivity, getPracticeQueueCount } from '../utils/db.js'
+import * as DB from '../utils/db.js'
 import { supabase } from '../lib/supabase.js'
 import { calcLevel, ACHIEVEMENTS } from '../utils/gamification.js'
 
@@ -66,10 +66,10 @@ export default function ProfileScreen({ user, lang, onNav }) {
 
   useEffect(() => {
     Promise.all([
-      getStats(user.id, lang),
-      getProgress(user.id, lang),
+      DB.getStats(user.id, lang),
+      DB.getProgress(user.id, lang),
       supabase.from('profiles').select('photo_url,created_at').eq('id', user.id).single(),
-      getHeatmap(user.id, lang)
+      DB.getHeatmap(user.id, lang)
     ]).then(([s, p, { data }, h]) => {
       setSt(s); setProg(p)
       setPhoto(data?.photo_url || null)
@@ -84,7 +84,7 @@ export default function ProfileScreen({ user, lang, onNav }) {
     reader.onload = ev => {
       const url = ev.target.result
       setPhoto(url)
-      updateProfile(user.id, { photo_url: url })
+      DB.updateProfile(user.id, { photo_url: url })
     }
     reader.readAsDataURL(file)
   }
@@ -218,216 +218,33 @@ export default function ProfileScreen({ user, lang, onNav }) {
         <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:8 }}>
           <span style={{ color:C.ts, fontSize:10 }}>ნაკლები</span>
           {[0.08, 0.33, 0.66, 1].map(v => (
-            <div key={v} style={{ width:10, height:10, borderRadius:2,
-              background:`${C.a}${Math.round(v*255).toString(16).padStart(2,'0')}` }} />
+            <div key={v} style={{ width:12, height:12, borderRadius:3, background:`rgba(99,102,241,${v})` }} />
           ))}
           <span style={{ color:C.ts, fontSize:10 }}>მეტი</span>
         </div>
       </div>
-
-      {/* Stats Graph */}
-      <div style={{ ...gls({ padding:14 }), marginBottom:12 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-          <div style={{ color:C.t, fontWeight:700, fontSize:13 }}>📈 14-დღიანი პროგრესი</div>
-        </div>
-        <StatsGraph data={activity} C={C} />
-      </div>
-
-      {/* Share + Friends buttons */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:12 }}>
-        <button onClick={() => shareProgress(st)} className="tap"
-          style={{ background:'linear-gradient(135deg,'+C.p+'22,'+C.a+'22)',
-            border:'1px solid '+C.p+'44', borderRadius:14, padding:'14px 12px',
-            display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontFamily:'inherit' }}>
-          <span style={{ fontSize:22 }}>📤</span>
-          <div style={{ textAlign:'left' }}>
-            <div style={{ color:C.t, fontWeight:700, fontSize:13 }}>გაზიარება</div>
-            <div style={{ color:C.ts, fontSize:10 }}>Instagram/WhatsApp</div>
-          </div>
-        </button>
-        <button onClick={() => onNav('friends')} className="tap"
-          style={{ background:'linear-gradient(135deg,'+C.g+'22,'+C.a+'22)',
-            border:'1px solid '+C.g+'44', borderRadius:14, padding:'14px 12px',
-            display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontFamily:'inherit' }}>
-          <span style={{ fontSize:22 }}>👥</span>
-          <div style={{ textAlign:'left' }}>
-            <div style={{ color:C.t, fontWeight:700, fontSize:13 }}>მეგობრები</div>
-            <div style={{ color:C.ts, fontSize:10 }}>ძებნა / გამოწვევა</div>
-          </div>
-        </button>
-      </div>
-
-      {/* Practice Queue card */}
-      <button onClick={() => onNav('practiceQueue')} className="tap"
-        style={{ width:'100%', background:pqCount > 0
-            ? `linear-gradient(135deg,${C.a}22,${C.p}22)`
-            : C.card2,
-          border:`1px solid ${pqCount > 0 ? C.a+'44' : C.bdL}`,
-          borderRadius:14, padding:'14px 16px', marginBottom:12,
-          display:'flex', alignItems:'center', gap:12, cursor:'pointer',
-          fontFamily:'inherit', textAlign:'left' }}>
-        <div style={{ width:44, height:44, borderRadius:12, flexShrink:0,
-          background:pqCount > 0 ? `linear-gradient(135deg,${C.a},${C.p})` : C.card3,
-          display:'flex', alignItems:'center', justifyContent:'center', fontSize:22 }}>
-          📚
-        </div>
-        <div style={{ flex:1 }}>
-          <div style={{ color:C.t, fontWeight:700, fontSize:14 }}>სამეცადინო</div>
-          <div style={{ color:C.ts, fontSize:11, marginTop:2 }}>
-            {pqCount > 0
-              ? `${pqCount} სიტყვა სამეცადინოდ მომზადებულია`
-              : 'ნასწავლი სიტყვებიდან დაამატე'}
-          </div>
-        </div>
-        {pqCount > 0 && (
-          <div style={{ background:`linear-gradient(135deg,${C.a},${C.p})`,
-            color:'#fff', borderRadius:10, minWidth:28, height:28,
-            display:'flex', alignItems:'center', justifyContent:'center',
-            fontWeight:800, fontSize:13 }}>{pqCount}</div>
-        )}
-      </button>
-
-      {/* Duel button */}
-      <button onClick={() => onNav('duel')}
-        style={{ width:'100%', background:`linear-gradient(135deg,${C.a}22,${C.p}22)`,
-          border:`1px solid ${C.a}44`, borderRadius:14, padding:'14px 16px',
-          display:'flex', alignItems:'center', gap:12, cursor:'pointer',
-          fontFamily:'inherit', marginBottom:12, textAlign:'left' }}>
-        <span style={{ fontSize:28 }}>⚔️</span>
-        <div>
-          <div style={{ color:C.t, fontWeight:700, fontSize:14 }}>დუელი</div>
-          <div style={{ color:C.ts, fontSize:11 }}>სხვა მომხმარებელს გამოიწვიე</div>
-        </div>
-        <div style={{ marginLeft:'auto', color:C.a, fontSize:18 }}>›</div>
-      </button>
-
-      {/* Achievements tab */}
-      {achTab && (
-        <div style={{ ...gls({ padding:14 }), marginBottom:12 }}>
-          <div style={{ color:C.t, fontWeight:700, fontSize:14, marginBottom:12 }}>
-            🏆 მიღწევები — {earned.length}/{ACHIEVEMENTS.length}
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
-            {ACHIEVEMENTS.map(a=>{
-              const isEarned = earned.includes(a.id)
-              return (
-                <div key={a.id} style={{ padding:'10px 8px', borderRadius:12, textAlign:'center',
-                                          background: isEarned ? `${C.gold}15` : C.card3,
-                                          border: `1px solid ${isEarned ? C.gold+'55' : C.bdL}`,
-                                          opacity: isEarned ? 1 : 0.45, transition:'all .2s' }}>
-                  <div style={{ fontSize:22 }}>{a.icon}</div>
-                  <div style={{ color: isEarned ? C.gold : C.ts, fontWeight:700, fontSize:10,
-                                marginTop:4, lineHeight:1.3 }}>{a.name}</div>
-                  <div style={{ color:C.tm, fontSize:9, marginTop:2 }}>{a.desc}</div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Chat stats */}
-      <div style={{ ...gls({ padding:14 }), marginBottom:12 }}>
-        <div style={{ color:C.t, fontWeight:700, fontSize:13, marginBottom:10 }}>💬 ჩათის სტატ.</div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-          <div style={{ background:C.card3, borderRadius:10, padding:'10px 12px' }}>
-            <div style={{ color:C.g, fontSize:20, fontWeight:900 }}>{st?.chatCorrect}</div>
-            <div style={{ color:C.ts, fontSize:11 }}>სწორი</div>
-          </div>
-          <div style={{ background:C.card3, borderRadius:10, padding:'10px 12px' }}>
-            <div style={{ color:C.a, fontSize:20, fontWeight:900 }}>{st?.totalAns}</div>
-            <div style={{ color:C.ts, fontSize:11 }}>სულ</div>
-          </div>
-        </div>
-      </div>
-
-      <button onClick={()=>onNav('settings')}
-        style={{ width:'100%', padding:'13px 16px', background:C.card2, border:`1px solid ${C.bdL}`,
-                 borderRadius:14, color:C.t, fontSize:15, fontWeight:700, cursor:'pointer',
-                 display:'flex', alignItems:'center', justifyContent:'space-between', fontFamily:'inherit' }}>
-        <span>⚙️ პარამეტრები</span><span style={{ color:C.ts }}>›</span>
-      </button>
     </div>
   )
 }
 
-// ── Heatmap Grid Component ───────────────────────────────────
 function HeatmapGrid({ heat, C }) {
-  const days = []
-  const today = new Date()
-  for (let i = 363; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(d.getDate() - i)
+  const cells = []
+  const base = new Date()
+  base.setDate(base.getDate() - 363)
+  for (let i = 0; i < 364; i++) {
+    const d = new Date(base)
+    d.setDate(base.getDate() + i)
     const key = d.toISOString().slice(0, 10)
-    days.push({ key, count: heat[key] || 0, dow: d.getDay() })
-  }
-  // Pad start so first column aligns to Sunday
-  const firstDow = days[0].dow
-  const padded = Array(firstDow).fill(null).concat(days)
-  // Split into columns of 7
-  const cols = []
-  for (let i = 0; i < padded.length; i += 7) cols.push(padded.slice(i, i + 7))
-
-  const color = (n) => {
-    if (!n) return C.card3
-    const op = n < 3 ? '28' : n < 7 ? '66' : n < 15 ? 'aa' : 'ff'
-    return `${C.a}${op}`
+    cells.push({ key, value: heat[key] || 0 })
   }
 
+  const max = Math.max(1, ...cells.map(c => c.value))
   return (
-    <div style={{ overflowX:'auto', paddingBottom:2 }}>
-      <div style={{ display:'flex', gap:2, width:'max-content' }}>
-        {cols.map((col, ci) => (
-          <div key={ci} style={{ display:'flex', flexDirection:'column', gap:2 }}>
-            {col.map((day, di) => (
-              <div key={di}
-                title={day ? `${day.key}: ${day.count}` : ''}
-                style={{ width:9, height:9, borderRadius:2, flexShrink:0,
-                  background: day ? color(day.count) : 'transparent' }}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ── Stats Graph Component (SVG line chart) ───────────────────
-function StatsGraph({ data, C }) {
-  if (!data || data.length === 0) return null
-  const W = 300, H = 64
-  const max = Math.max(...data.map(d => d.count), 1)
-  const pts = data.map((d, i) => {
-    const x = Math.round((i / (data.length - 1)) * W)
-    const y = Math.round(H - (d.count / max) * (H - 6))
-    return [x, y, d]
-  })
-  const polyline = pts.map(([x,y]) => `${x},${y}`).join(' ')
-  // Area fill
-  const area = `0,${H} ` + polyline + ` ${W},${H}`
-
-  return (
-    <div style={{ overflowX:'auto' }}>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:'visible', minWidth:240 }}>
-        <defs>
-          <linearGradient id="graphGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={C.a} stopOpacity="0.25"/>
-            <stop offset="100%" stopColor={C.a} stopOpacity="0"/>
-          </linearGradient>
-        </defs>
-        <polygon points={area} fill="url(#graphGrad)"/>
-        <polyline points={polyline} fill="none" stroke={C.a} strokeWidth="2"
-          strokeLinecap="round" strokeLinejoin="round"/>
-        {pts.map(([x,y,d],i) => d.count > 0 && (
-          <circle key={i} cx={x} cy={y} r="3" fill={C.a}/>
-        ))}
-      </svg>
-      <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
-        <span style={{ color:C.ts, fontSize:9 }}>{data[0]?.label}</span>
-        <span style={{ color:C.ts, fontSize:9 }}>{data[Math.floor(data.length/2)]?.label}</span>
-        <span style={{ color:C.ts, fontSize:9 }}>{data[data.length-1]?.label}</span>
-      </div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(52, 1fr)', gap: 2 }}>
+      {cells.map(c => {
+        const alpha = c.value ? Math.max(0.12, (c.value / max) * 0.95) : 0.06
+        return <div key={c.key} title={`${c.key}: ${c.value}`} style={{ width: '100%', aspectRatio: '1 / 1', borderRadius: 3, background: `rgba(99,102,241,${alpha})`, border: `1px solid ${C.bdL}` }} />
+      })}
     </div>
   )
 }
