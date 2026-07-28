@@ -39,6 +39,57 @@ export const getWeakWordIds = async (userId, lang) => {
   return (data || []).map(row => row.word_id).filter(Boolean)
 }
 
+export const getHeatmap = async (userId, lang) => {
+  try {
+    const from = new Date()
+    from.setDate(from.getDate() - 363)
+    const { data, error } = await supabase
+      .from('word_progress')
+      .select('updated_at')
+      .eq('user_id', userId)
+      .eq('lang', lang)
+      .gte('updated_at', from.toISOString())
+    if (error) { console.error('getHeatmap', error); return {} }
+    return (data || []).reduce((acc, row) => {
+      const key = new Date(row.updated_at).toISOString().slice(0, 10)
+      acc[key] = (acc[key] || 0) + 1
+      return acc
+    }, {})
+  } catch (e) {
+    console.error('getHeatmap', e)
+    return {}
+  }
+}
+
+export const getDailyActivity = async (userId, days = 14) => {
+  try {
+    const from = new Date()
+    from.setDate(from.getDate() - (days - 1))
+    const { data, error } = await supabase
+      .from('word_progress')
+      .select('updated_at')
+      .eq('user_id', userId)
+      .gte('updated_at', from.toISOString())
+    if (error) { console.error('getDailyActivity', error); return [] }
+
+    const counts = (data || []).reduce((acc, row) => {
+      const key = new Date(row.updated_at).toISOString().slice(0, 10)
+      acc[key] = (acc[key] || 0) + 1
+      return acc
+    }, {})
+
+    return Array.from({ length: days }, (_, i) => {
+      const d = new Date()
+      d.setDate(d.getDate() - (days - 1 - i))
+      const key = d.toISOString().slice(0, 10)
+      return { date: key, label: key.slice(5), count: counts[key] || 0 }
+    })
+  } catch (e) {
+    console.error('getDailyActivity', e)
+    return []
+  }
+}
+
 export const getStats = async (userId, lang) => {
   const ws = allWords(lang)
   const [{ data: prog }, { data: prof }, { data: acts }] = await Promise.all([
@@ -135,6 +186,12 @@ export const getPracticeQueueItems = async (userId, lang, limit = 50) => {
 export const getPracticeQueueCount = async (userId, lang) => {
   const { count, error } = await supabase.from('practice_queue').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('lang', lang).eq('status', 'active')
   if (error) { console.error('getPracticeQueueCount', error); return 0 }
+  return count || 0
+}
+
+export const getTotalUnreadDms = async (userId) => {
+  const { count, error } = await supabase.from('direct_messages').select('id', { count: 'exact', head: true }).eq('receiver_id', userId).eq('read', false)
+  if (error) { console.error('getTotalUnreadDms', error); return 0 }
   return count || 0
 }
 
