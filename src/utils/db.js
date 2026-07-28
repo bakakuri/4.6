@@ -183,6 +183,8 @@ export const getPracticeQueueItems = async (userId, lang, limit = 50) => {
   return (data || []).map(r => r.word_id).filter(Boolean)
 }
 
+export const getPracticeQueue = getPracticeQueueItems
+
 export const getPracticeQueueCount = async (userId, lang) => {
   const { count, error } = await supabase.from('practice_queue').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('lang', lang).eq('status', 'active')
   if (error) { console.error('getPracticeQueueCount', error); return 0 }
