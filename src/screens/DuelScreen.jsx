@@ -1,10 +1,10 @@
-
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../lib/ThemeContext.jsx'
 import { LANG } from '../theme.js'
 import { allWords } from '../data/words.js'
 import { supabase } from '../lib/supabase.js'
-import { getAllProfiles, createDuel, respondDuel, submitDuelScore, getActiveDuel } from '../utils/db.js'
+import { getAllProfiles } from '../utils/db.js'
+import { createDuel, respondDuel, submitDuelScore, getActiveDuel } from '../utils/duels.js'
 
 const TOTAL = 10
 const norm = s => s.trim().replace(/\s+/g, ' ').toLowerCase()
@@ -219,119 +219,66 @@ export default function DuelScreen({ user, lang, onBack }) {
         <div style={{ display:'flex', gap:8 }}>
           <input value={inp} onChange={e => setInp(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && submit()}
-            placeholder="ქართული თარგმანი..."
-            disabled={!!fb}
-            autoComplete="off" autoCorrect="off" spellCheck="false"
-            style={{ flex:1, background:C.card3, border:`1px solid ${C.bdL}`,
-              borderRadius:12, padding:'13px 14px', color:C.t, fontSize:14,
-              outline:'none', fontFamily:'inherit',
-              opacity: fb ? 0.5 : 1 }} />
-          <button onClick={submit} disabled={!inp.trim() || !!fb}
+            placeholder="Enter translation..."
+            style={{ flex:1, background:C.card2, color:C.t, border:`1px solid ${C.bdL}`,
+              borderRadius:12, padding:'14px 12px', fontFamily:'inherit', outline:'none' }} />
+          <button onClick={submit} disabled={!!fb || !inp.trim()}
             style={{ background:`linear-gradient(135deg,${C.a},${C.p})`, border:'none',
-              borderRadius:12, width:50, cursor:'pointer', fontSize:20,
-              opacity: !inp.trim() || !!fb ? 0.4 : 1 }}>➤</button>
+              borderRadius:12, padding:'0 16px', color:'#fff', fontWeight:700,
+              cursor:'pointer', fontFamily:'inherit' }}>✓</button>
         </div>
       </div>
     )
   }
 
-  // ══ SENT (waiting for opponent) ══════════════════════════════
-  if (phase === 'sent') return (
-    <div className="page-enter" style={S}>
-      <button onClick={onBack} style={{ background:'none', border:'none', color:C.ts,
-        cursor:'pointer', fontSize:13, marginBottom:24, padding:0 }}>← უკან</button>
-      <div style={{ textAlign:'center', paddingTop:40 }}>
-        <div style={{ fontSize:48, marginBottom:16 }}>⏳</div>
-        <div style={{ color:C.t, fontWeight:700, fontSize:17, marginBottom:8 }}>
-          {duel?.opponent_name}-ს ელოდება...
-        </div>
-        <div style={{ color:C.ts, fontSize:13, marginBottom:32 }}>
-          {lc.flag} {TOTAL} სიტყვა · {lang}
-        </div>
-        <button onClick={() => respondDuel(duel.id, false).then(() => {
-          setDuel(null); setPhase('lobby')
-          getAllProfiles().then(ps => setUsers(ps.filter(p => p.id !== user.id)))
-        })} style={{ background:C.card3, border:`1px solid ${C.bdL}`, borderRadius:12,
-          padding:'11px 24px', color:C.ts, cursor:'pointer', fontFamily:'inherit', fontSize:13 }}>
-          გაუქმება
-        </button>
-      </div>
-    </div>
-  )
-
-  // ══ INCOMING (I was challenged) ══════════════════════════════
-  if (phase === 'incoming') return (
-    <div className="page-enter" style={S}>
-      <button onClick={onBack} style={{ background:'none', border:'none', color:C.ts,
-        cursor:'pointer', fontSize:13, marginBottom:24, padding:0 }}>← უკან</button>
-      <div style={{ textAlign:'center', paddingTop:30 }}>
-        <div style={{ fontSize:52, marginBottom:16 }}>⚔️</div>
-        <div style={{ color:C.t, fontWeight:800, fontSize:18, marginBottom:8 }}>
-          {duel?.challenger_name} გამოგიწვიათ!
-        </div>
-        <div style={{ color:C.ts, fontSize:13, marginBottom:32 }}>
-          {lc.flag} {TOTAL} სიტყვა · ვინ სწრაფია?
-        </div>
-        <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
-          <button onClick={() => respond(false)}
-            style={{ background:C.card3, border:`1px solid ${C.r}44`, borderRadius:12,
-              padding:'12px 24px', color:C.r, cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:14 }}>
-            ❌ უარი
-          </button>
-          <button onClick={() => respond(true)}
-            style={{ background:`linear-gradient(135deg,${C.g},#0fa37a)`, border:'none',
-              borderRadius:12, padding:'12px 24px', color:'#fff', cursor:'pointer',
-              fontFamily:'inherit', fontWeight:700, fontSize:14 }}>
-            ⚔️ მიღება
-          </button>
+  // ══ SENT / INCOMING ══════════════════════════════════════════
+  if (phase === 'sent' || phase === 'incoming') {
+    const title = phase === 'sent' ? 'მოწვევა გაგზავნილია' : 'მოგივიდა დუელი'
+    const sub   = phase === 'sent' ? `ელოდება ${opName}-ს პასუხს...` : `${opName} გიწვევს დუელში`
+    return (
+      <div style={S}>
+        <button onClick={onBack} style={{ background:'none', border:'none', color:C.ts, cursor:'pointer',
+          fontSize:13, marginBottom:16, padding:0 }}>← უკან</button>
+        <div style={{ textAlign:'center', padding:'40px 0' }}>
+          <div style={{ fontSize:64, marginBottom:16 }}>⚔️</div>
+          <div style={{ color:C.t, fontWeight:800, fontSize:22, marginBottom:4 }}>{title}</div>
+          <div style={{ color:C.ts, fontSize:13, marginBottom:28 }}>{sub}</div>
+          {phase === 'incoming' && (
+            <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
+              <button onClick={() => respond(true)} style={{ background:`linear-gradient(135deg,${C.g},${C.a})`, border:'none',
+                borderRadius:12, padding:'12px 24px', color:'#fff', fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>დამტკიცება</button>
+              <button onClick={() => respond(false)} style={{ background:C.card2, border:`1px solid ${C.bdL}`,
+                borderRadius:12, padding:'12px 24px', color:C.t, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>უარი</button>
+            </div>
+          )}
         </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   // ══ LOBBY ════════════════════════════════════════════════════
   return (
-    <div className="page-enter" style={S}>
-      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20 }}>
-        <button onClick={onBack} style={{ background:'none', border:'none', color:C.ts,
-          cursor:'pointer', fontSize:13, padding:0 }}>←</button>
-        <div>
-          <div style={{ color:C.t, fontWeight:800, fontSize:18 }}>⚔️ დუელი</div>
-          <div style={{ color:C.ts, fontSize:11 }}>{lc.flag} {TOTAL} სიტყვა · realtime</div>
-        </div>
-      </div>
-
-      {users.length === 0 ? (
-        <div style={{ textAlign:'center', color:C.ts, paddingTop:60, fontSize:14 }}>
-          სხვა მომხმარებელი ჯერ არ არის 😅
-        </div>
-      ) : (
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {users.map((u, ui) => (
-            <div key={u.id} className="card-rise" style={{ ...gls({ padding:'12px 14px' }), animationDelay:`${ui*50}ms`,
-              display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ width:40, height:40, borderRadius:'50%', overflow:'hidden',
-                border:`2px solid ${C.a}`, background:C.card3, flexShrink:0,
-                display:'flex', alignItems:'center', justifyContent:'center' }}>
-                {u.photo_url
-                  ? <img src={u.photo_url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                  : <span style={{ fontWeight:800, color:C.a, fontSize:14 }}>{u.username.slice(0,2).toUpperCase()}</span>}
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ color:C.t, fontWeight:700, fontSize:14 }}>{u.username}</div>
-                <div style={{ color:C.ts, fontSize:11 }}>⚡ {u.xp || 0} XP · 🔥 {u.streak || 0}</div>
-              </div>
-              <button onClick={() => challenge(u)} disabled={busy}
-                style={{ background:`linear-gradient(135deg,${C.a},${C.p})`, border:'none',
-                  borderRadius:10, padding:'8px 14px', color:'#fff', fontWeight:700,
-                  fontSize:12, cursor:'pointer', fontFamily:'inherit',
-                  opacity: busy ? 0.5 : 1 }}>
-                ⚔️ გამოიწვიე
-              </button>
+    <div style={S}>
+      <button onClick={onBack} style={{ background:'none', border:'none', color:C.ts, cursor:'pointer',
+        fontSize:13, marginBottom:16, padding:0 }}>← უკან</button>
+      <div style={{ color:C.t, fontWeight:800, fontSize:20, marginBottom:12 }}>აირჩიე მოწინააღმდეგე</div>
+      <div style={{ display:'grid', gap:10 }}>
+        {users.map(u => (
+          <div key={u.id} style={{ background:C.card2, border:`1px solid ${C.bdL}`, borderRadius:16,
+            padding:14, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div>
+              <div style={{ color:C.t, fontWeight:700 }}>{u.username}</div>
+              <div style={{ color:C.ts, fontSize:11 }}>{u.current_lang || lang}</div>
             </div>
-          ))}
-        </div>
-      )}
+            <button onClick={() => challenge(u)} disabled={busy}
+              style={{ background:`linear-gradient(135deg,${C.a},${C.p})`, border:'none',
+                borderRadius:10, padding:'10px 14px', color:'#fff', fontWeight:700,
+                cursor:'pointer', fontFamily:'inherit' }}>
+              გამოწვევა
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
